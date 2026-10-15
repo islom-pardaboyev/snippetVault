@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "deploy": "npm run build && firebase deploy"
+    "deploy": "npm run build && firebase deploy",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",
@@ -35,7 +37,8 @@
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-router-dom": "^7.18.4",
-    "simple-icons": "^16.35.0"
+    "simple-icons": "^16.35.0",
+    "sucrase": "^3.35.1"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
@@ -45,6 +48,7 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
-    "vite-plugin-pwa": "^2.0.0"
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^5.0.4"
   }
 }
