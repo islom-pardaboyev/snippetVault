@@ -11,7 +11,8 @@ npm run dev        # http://localhost:5173
 
 ## Firebase (one-time)
 
-1. Console → **Build → Authentication → Email/Password → Enable**
+1. Console → **Build → Authentication → Sign-in method** → enable **Email/Password** and **Google** (pick a support email)
+   - Under **Settings → Authorized domains** add your deployed domain (localhost is allowed by default)
 2. Console → **Build → Firestore Database → Create** (production mode)
 3. Config already lives in `src/lib/firebase.ts`.
 
