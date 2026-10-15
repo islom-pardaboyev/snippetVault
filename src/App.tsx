@@ -12,6 +12,7 @@ import { NotFound } from "./pages/NotFound";
 import { Groups } from "./pages/Groups";
 import { Offline } from "./pages/Offline";
 import { InstallPrompt } from "./components/InstallPrompt";
+import { Admin } from "./pages/Admin";
 
 const Editor = lazy(() => import("./pages/Editor").then((m) => ({ default: m.Editor })));
 const Insights = lazy(() => import("./pages/Insights").then((m) => ({ default: m.Insights })));
@@ -32,7 +33,7 @@ function Gate() {
   useEffect(() => { document.title = "SnippetVault"; }, []);
 
   const { pathname } = useLocation();
-  const known = /^\/($|favorites$|insights$|groups$|new$|lang\/[^/]+$|tag\/[^/]+$|group\/[^/]+$|s\/[^/]+(\/edit)?$)/.test(pathname);
+  const known = /^\/($|favorites$|insights$|groups$|new$|lang\/[^/]+$|tag\/[^/]+$|group\/[^/]+$|s\/[^/]+(\/edit)?$|admin$)/.test(pathname);
 
   if (status === "loading") return online ? <Splash /> : <Offline />;
   if (status === "out") {
@@ -53,6 +54,7 @@ function Gate() {
           <Route path="new" element={<Suspense fallback={<Fallback />}><Editor /></Suspense>} />
           <Route path="s/:id" element={<Detail />} />
           <Route path="s/:id/edit" element={<Suspense fallback={<Fallback />}><Editor /></Suspense>} />
+          <Route path="admin" element={<Admin />} />
           <Route path="insights" element={<Suspense fallback={<Fallback />}><Insights /></Suspense>} />
         </Route>
         <Route path="*" element={<NotFound />} />

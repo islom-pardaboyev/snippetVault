@@ -6,6 +6,8 @@ const PATHS = {
   edit: <><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></>,
   trash: <path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14" />,
   back: <path d="m15 18-6-6 6-6" />,
+  lock: <><rect x="4" y="10.5" width="16" height="10" rx="2.5" /><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" /></>,
+  link: <><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" /></>,
   download: <path d="M12 4v12m0 0-4-4m4 4 4-4M4 20h16" />,
   upload: <path d="M12 16V4m0 0L8 8m4-4 4 4M4 20h16" />,
   sun: <><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></>,

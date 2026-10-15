@@ -2,9 +2,16 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import {
   onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
   signOut, sendPasswordResetEmail, sendEmailVerification, updatePassword,
-  reauthenticateWithCredential, EmailAuthProvider, GoogleAuthProvider, signInWithPopup, type User,
+  reauthenticateWithCredential, reauthenticateWithPopup, deleteUser,
+  EmailAuthProvider, GoogleAuthProvider, signInWithPopup, type User,
 } from "firebase/auth";
 import { auth } from "../lib/firebase";
+import { wipeUserData } from "../lib/account";
+
+/** Dev-only demo: `npm run dev` + `?demo` opens the app with seeded data and no Firebase account. Never in production builds. */
+export const DEMO = import.meta.env.DEV && typeof location !== "undefined" && new URLSearchParams(location.search).has("demo");
+export const ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL ?? "").trim().toLowerCase();
+export const isAdminEmail = (email?: string | null) => !!ADMIN_EMAIL && (email ?? "").toLowerCase() === ADMIN_EMAIL;
 
 interface AuthCtx {
   status: "loading" | "in" | "out";
@@ -20,6 +27,8 @@ interface AuthCtx {
   hasPassword: boolean;
   /** false for an email/password account that hasn't confirmed its address yet */
   verified: boolean;
+  /** password accounts pass their password, Google accounts pass null and re-confirm in a popup */
+  deleteAccount(password: string | null): Promise<void>;
   logout(): Promise<void>;
 }
 const Ctx = createContext<AuthCtx | null>(null);
@@ -50,15 +59,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await updatePassword(u, next);
   }, []);
   const reset = useCallback(async (e: string) => { await sendPasswordResetEmail(auth, e); }, []);
+  const deleteAccount = useCallback(async (password: string | null) => {
+    const u = auth.currentUser;
+    if (!u) throw new Error("Not signed in");
+    // re-authenticate first so a failed password never leaves the account half-wiped
+    if (password !== null) await reauthenticateWithCredential(u, EmailAuthProvider.credential(u.email ?? "", password));
+    else await reauthenticateWithPopup(u, new GoogleAuthProvider());
+    await wipeUserData(u.uid);
+    await deleteUser(u);
+  }, []);
   const logout = useCallback(async () => { if (auth.currentUser) await signOut(auth); }, []);
 
   const value = useMemo<AuthCtx>(() => ({
-    status: user ? "in" : ready ? "out" : "loading",
-    user, email: user?.email ?? null, signIn, signUp, signInWithGoogle, reset, resendVerification, changePassword,
-    hasPassword: !!user?.providerData.some((p) => p.providerId === "password"),
-    verified: !user || user.emailVerified || !user.providerData.some((p) => p.providerId === "password"),
+    status: DEMO || user ? "in" : ready ? "out" : "loading",
+    user, email: DEMO ? "demo@snippetvault.dev" : user?.email ?? null,
+    signIn, signUp, signInWithGoogle, reset, resendVerification, changePassword, deleteAccount,
+    hasPassword: DEMO || !!user?.providerData.some((p) => p.providerId === "password"),
+    verified: DEMO || !user || user.emailVerified || !user.providerData.some((p) => p.providerId === "password"),
     logout,
-  }), [user, ready, signIn, signUp, signInWithGoogle, reset, resendVerification, changePassword, logout]);
+  }), [user, ready, signIn, signUp, signInWithGoogle, reset, resendVerification, changePassword, deleteAccount, logout]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
@@ -86,6 +105,7 @@ const MESSAGES: Record<string, string> = {
   "auth/account-exists-with-different-credential": "That email already has an account with a different sign-in method.",
   "auth/unauthorized-domain": "This domain isn't authorised for sign-in — add it in Firebase → Authentication → Settings.",
   "auth/requires-recent-login": "Please sign out and back in, then try again.",
+  "auth/user-mismatch": "That's not the account you're signed in with.",
 };
 export function authMessage(err: unknown): string {
   const code = (err as { code?: string })?.code ?? "";

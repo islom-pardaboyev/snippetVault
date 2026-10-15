@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Icon } from "./Icon";
 import { useTheme, useInstall, useToast } from "../hooks/ui";
-import { useAuth, authMessage } from "../hooks/auth";
+import { isAdminEmail, useAuth, authMessage } from "../hooks/auth";
 import { useSnippets } from "../hooks/snippets";
 import { exportJson, parseImport, seedSnippets } from "../lib/utils";
 import type { Accent, ThemeMode } from "../lib/types";
@@ -26,6 +27,7 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose(): vo
   const file = useRef<HTMLInputElement>(null);
   const { theme, accent, customColor, setTheme, setAccent, setCustomColor } = useTheme();
   const { email, user, logout, hasPassword, changePassword } = useAuth();
+  const nav = useNavigate();
   const [pwOpen, setPwOpen] = useState(false);
   const [curPw, setCurPw] = useState("");
   const [newPw, setNewPw] = useState("");
@@ -133,6 +135,11 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose(): vo
             hint={`${user?.displayName ? `${email} · ` : ""}${viaGoogle ? "Signed in with Google" : "Email & password"} · synced with Firebase`}>
             <button className="btn btn-danger" onClick={() => { onClose(); logout(); }}><Icon name="logout" size={16} /> Sign out</button>
           </Row>
+          {isAdminEmail(email) && (
+            <Row label="Admin" hint="Site administration (passcode required)">
+              <button className="btn" onClick={() => { onClose(); nav("/admin"); }}><Icon name="lock" size={16} /> Open admin</button>
+            </Row>
+          )}
           {hasPassword && (
             <div className="border-t border-line pt-2">
               <Row label="Password" hint={pwNote.text && !pwOpen ? pwNote.text : "Change the password you sign in with"}>
@@ -151,8 +158,56 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose(): vo
             </div>
           )}
         </Section>
+
+        <Section title="Danger zone">
+          <DeleteAccount hasPassword={hasPassword} email={email} onDeleted={onClose} />
+        </Section>
       </div>
     </dialog>
+  );
+}
+
+function DeleteAccount({ hasPassword, email, onDeleted }: { hasPassword: boolean; email: string | null; onDeleted(): void }) {
+  const { deleteAccount } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [pw, setPw] = useState("");
+  const [typed, setTyped] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const ready = typed.trim().toLowerCase() === (email ?? "").toLowerCase() && (!hasPassword || !!pw);
+
+  const go = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true); setErr("");
+    try {
+      await deleteAccount(hasPassword ? pw : null);
+      onDeleted(); // the auth listener then returns the app to the login screen
+    } catch (error) {
+      setErr(authMessage(error));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="py-2">
+      <Row label="Delete account" hint="Permanently removes your snippets, groups, images and sign-in. This can't be undone.">
+        <button className="btn btn-danger" onClick={() => setOpen((o) => !o)}>{open ? "Cancel" : "Delete…"}</button>
+      </Row>
+      {open && (
+        <form onSubmit={go} className="grid gap-2 pb-2">
+          <p className="text-[13px] text-muted">Type <b className="text-ink">{email}</b> to confirm.</p>
+          <input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={email ?? ""} autoComplete="off"
+            className="w-full rounded-[10px] border border-line bg-surface-2 px-3 py-2.5 outline-none focus:border-danger" />
+          {hasPassword && (
+            <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="Your password" autoComplete="current-password"
+              className="w-full rounded-[10px] border border-line bg-surface-2 px-3 py-2.5 outline-none focus:border-danger" />
+          )}
+          {!hasPassword && <p className="text-[13px] text-muted">You'll be asked to confirm with Google in a popup.</p>}
+          {err && <p className="text-[13px] text-danger">{err}</p>}
+          <button className="btn btn-danger" disabled={!ready || busy}>{busy ? "Deleting…" : "Permanently delete my account"}</button>
+        </form>
+      )}
+    </div>
   );
 }
 

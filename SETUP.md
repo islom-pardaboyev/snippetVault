@@ -16,6 +16,10 @@ npm run dev        # http://localhost:5173
 2. Console → **Build → Firestore Database → Create** (production mode)
 3. Config already lives in `src/lib/firebase.ts`.
 
+## Admin page (optional)
+
+Copy `.env.example` to `.env.local` and set `VITE_ADMIN_EMAIL` and `VITE_ADMIN_PASSCODE_SHA256`. Restart `npm run dev` after changing them.
+
 ## Deploy
 
 ```

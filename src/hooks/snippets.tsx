@@ -3,10 +3,10 @@ import {
   collection, deleteDoc, doc, getDocs, limit, onSnapshot, orderBy, query, setDoc, writeBatch,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { useAuth } from "./auth";
+import { DEMO, useAuth } from "./auth";
 import { useOnline, useToast } from "./ui";
 import type { GroupMeta, Snippet, SyncState, Version } from "../lib/types";
-import { newId } from "../lib/utils";
+import { newId, seedSnippets } from "../lib/utils";
 
 interface SnippetsCtx {
   snippets: Snippet[];
@@ -49,6 +49,7 @@ export function SnippetsProvider({ children }: { children: ReactNode }) {
 
   /* cloud: realtime snippets */
   useEffect(() => {
+    if (DEMO) { setSnippets(seedSnippets()); setLoaded(true); return; }
     if (!uid) { setSnippets([]); setLoaded(false); return; }
     setLoaded(false);
     return onSnapshot(
@@ -222,7 +223,7 @@ export function SnippetsProvider({ children }: { children: ReactNode }) {
     return snap.docs.map((d) => ({ vid: d.id, ...(d.data() as Omit<Version, "vid">) }));
   }, [uid]);
 
-  const sync: SyncState = !online ? "offline" : pending || fromCache ? "syncing" : "synced";
+  const sync: SyncState = !online ? "offline" : DEMO || (!pending && !fromCache) ? "synced" : "syncing";
 
   const value = useMemo<SnippetsCtx>(() => ({
     snippets, loaded, sync, save, remove, saveMany,
