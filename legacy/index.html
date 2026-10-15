@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SnippetVault — mockup</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel-2: #1c2128;
+    --border: #2a313c;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #7c3aed;
+    --accent-soft: rgba(124, 58, 237, 0.18);
+    --kw: #ff7b72;
+    --str: #a5d6ff;
+    --num: #79c0ff;
+    --com: #8b949e;
+    --radius: 12px;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  body.light {
+    --bg: #f6f8fa;
+    --panel: #ffffff;
+    --panel-2: #f0f3f6;
+    --border: #d8dee4;
+    --text: #1f2328;
+    --muted: #656d76;
+    --accent-soft: rgba(124, 58, 237, 0.10);
+    --kw: #cf222e;
+    --str: #0a3069;
+    --num: #0550ae;
+    --com: #6e7781;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  button { font-family: inherit; font-size: inherit; cursor: pointer; }
+  input, select, textarea { font-family: inherit; font-size: inherit; }
+  .hidden { display: none !important; }
+
+  /* ---------- Login ---------- */
+  #login {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .login-card {
+    width: 100%;
+    max-width: 380px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 36px 32px;
+    text-align: center;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.35);
+  }
+  .login-card .logo { font-size: 40px; }
+  .login-card h1 { margin: 12px 0 4px; font-size: 22px; letter-spacing: -0.02em; }
+  .login-card p { margin: 0 0 24px; color: var(--muted); font-size: 13px; }
+  .field { display: block; text-align: left; margin-bottom: 14px; }
+  .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  input[type="text"], input[type="password"], input[type="search"], select, textarea {
+    width: 100%;
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    padding: 10px 12px;
+    outline: none;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .btn {
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    color: var(--text);
+    border-radius: 9px;
+    padding: 9px 14px;
+    transition: background .15s, border-color .15s, transform .05s;
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn:active { transform: translateY(1px); }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .btn-primary:hover { filter: brightness(1.1); }
+  .btn-danger:hover { border-color: #f85149; color: #f85149; }
+  .btn-wide { width: 100%; }
+
+  /* ---------- App shell ---------- */
+  #app { min-height: 100vh; display: flex; flex-direction: column; }
+  header.topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 700; letter-spacing: -0.02em; }
+  .brand .dot { width: 20px; height: 20px; border-radius: 6px; background: var(--accent); display: inline-block; }
+  .topbar .spacer { flex: 1; }
+  .topbar .search { max-width: 320px; flex: 1; }
+  .icon-btn {
+    background: transparent; border: 1px solid transparent; color: var(--muted);
+    border-radius: 8px; padding: 7px 9px;
+  }
+  .icon-btn:hover { color: var(--text); border-color: var(--border); }
+
+  .layout { flex: 1; display: flex; min-height: 0; }
+  aside.sidebar {
+    width: 210px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    padding: 16px 12px;
+    background: var(--panel);
+  }
+  .side-group { margin-bottom: 22px; }
+  .side-group h3 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--muted); margin: 0 0 8px 8px;
+  }
+  .side-item {
+    display: flex; align-items: center; justify-content: space-between;
+    width: 100%; text-align: left; background: transparent; border: none;
+    color: var(--text); padding: 7px 9px; border-radius: 8px; font-size: 13.5px;
+  }
+  .side-item:hover { background: var(--panel-2); }
+  .side-item.active { background: var(--accent-soft); color: var(--text); font-weight: 600; }
+  .side-item .count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .side-item .tag-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  main.content { flex: 1; padding: 22px 26px 60px; overflow-y: auto; }
+  .content-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .content-head h2 { margin: 0; font-size: 18px; letter-spacing: -0.02em; }
+  .content-head .sub { color: var(--muted); font-size: 13px; }
+
+  /* ---------- Snippet cards ---------- */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+  .card {
+    text-align: left;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 15px 16px;
+    cursor: pointer;
+    transition: border-color .15s, transform .08s, box-shadow .15s;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 10px 24px rgba(0,0,0,0.25); }
+  .card .row1 { display: flex; align-items: flex-start; gap: 8px; }
+  .card .title { font-weight: 650; font-size: 14.5px; flex: 1; }
+  .card .desc { color: var(--muted); font-size: 12.5px; line-height: 1.4;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .card .meta { display: flex; align-items: center; gap: 8px; margin-top: auto; flex-wrap: wrap; }
+  .lang-badge {
+    font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 999px;
+    background: var(--accent-soft); color: var(--text); border: 1px solid var(--border);
+  }
+  .chip { font-size: 11.5px; color: var(--muted); }
+  .star { background: none; border: none; font-size: 15px; line-height: 1; color: var(--muted); padding: 2px; }
+  .star.on { color: #e3b341; }
+  .empty { color: var(--muted); padding: 40px 0; text-align: center; }
+
+  /* ---------- Detail ---------- */
+  .back { background: none; border: none; color: var(--muted); padding: 0 0 14px; font-size: 13.5px; }
+  .back:hover { color: var(--text); }
+  .detail-head { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+  .detail-head h2 { margin: 0 0 6px; font-size: 21px; letter-spacing: -0.02em; }
+  .detail-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
+  .detail-actions { margin-left: auto; display: flex; gap: 8px; }
+  .notes { color: var(--muted); font-size: 13.5px; margin: 14px 0 0; line-height: 1.5; }
+
+  .codeblock {
+    margin-top: 16px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .codeblock .cb-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; border-bottom: 1px solid var(--border);
+    background: var(--panel-2); font-size: 12px; color: var(--muted);
+  }
+  .codeblock .cb-body { padding: 10px 0; overflow-x: auto; }
+  .line { display: flex; font-family: var(--mono); font-size: 13px; line-height: 1.6; white-space: pre; }
+  .line .ln { width: 44px; flex-shrink: 0; text-align: right; padding-right: 14px; color: var(--muted); user-select: none; }
+  .line .lc { flex: 1; padding-right: 16px; }
+  .tok-kw { color: var(--kw); }
+  .tok-str { color: var(--str); }
+  .tok-num { color: var(--num); }
+  .tok-com { color: var(--com); font-style: italic; }
+
+  /* ---------- Editor ---------- */
+  .editor-grid { display: grid; grid-template-columns: 1fr; gap: 14px; max-width: 900px; }
+  .form-row { display: grid; grid-template-columns: 1fr 220px; gap: 14px; }
+  textarea.code-input {
+    font-family: var(--mono); font-size: 13px; line-height: 1.6;
+    min-height: 240px; resize: vertical; white-space: pre; tab-size: 2;
+  }
+  .editor-actions { display: flex; gap: 10px; justify-content: flex-end; }
+  .hint { color: var(--muted); font-size: 12px; }
+  .preview-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-top: 4px; }
+  .tagpill { display: inline-block; font-size: 12px; color: var(--muted); }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%) translateY(20px);
+    background: var(--accent); color: #fff; padding: 10px 18px; border-radius: 10px;
+    font-size: 13.5px; font-weight: 600; opacity: 0; pointer-events: none;
+    transition: opacity .2s, transform .2s; z-index: 50;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .demo-note {
+    margin-top: 18px; color: var(--muted); font-size: 11.5px; line-height: 1.5;
+  }
+  @media (max-width: 720px) {
+    aside.sidebar { display: none; }
+    .form-row { grid-template-columns: 1fr; }
+    main.content { padding: 18px 16px 60px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN ============ -->
+<div id="login">
+  <form class="login-card" id="loginForm">
+    <div class="logo">🗄️</div>
+    <h1>SnippetVault</h1>
+    <p id="authSub">Sign in to sync your snippets</p>
+    <label class="field">
+      <span>Email</span>
+      <input type="email" id="authEmail" autocomplete="email" placeholder="you@example.com" />
+    </label>
+    <label class="field">
+      <span>Password</span>
+      <input type="password" id="authPw" autocomplete="current-password" placeholder="At least 6 characters" />
+    </label>
+    <button class="btn btn-primary btn-wide" type="submit" id="authBtn">Sign in</button>
+    <button class="btn btn-wide" type="button" id="authToggle" style="margin-top:8px">Create an account</button>
+    <div class="demo-note" id="authNote">Your snippets sync across every device you sign in on.</div>
+  </form>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app" class="hidden">
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span> SnippetVault</div>
+    <div class="spacer"></div>
+    <input class="search" type="search" id="search" placeholder="Search title, code or tag…" oninput="onSearch(this.value)" />
+    <button class="btn btn-primary" onclick="openEditor()">+ New</button>
+    <button class="icon-btn" id="themeBtn" title="Toggle theme" onclick="toggleTheme()">🌗</button>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar" id="sidebar"></aside>
+    <main class="content" id="view"></main>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+/* =========================================================
+   SnippetVault — Firebase edition
+   Snippets live in Cloud Firestore at users/{uid}/snippets.
+   Realtime sync via onSnapshot; private via Firebase Auth.
+   ========================================================= */
+import { firebaseConfig } from "./firebase-config.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+import {
+  getAuth, onAuthStateChanged, signInWithEmailAndPassword,
+  createUserWithEmailAndPassword, signOut
+} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
+import {
+  getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot
+} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+const LANGUAGES = ["JavaScript", "Python", "SQL", "Shell", "CSS", "HTML"];
+
+function seed() {
+  const now = Date.now();
+  const d = (n) => new Date(now - n * 86400000).toISOString();
+  return [
+    { id: "s1", title: "Debounce function", language: "JavaScript", favorite: true, tags: ["utils", "performance"],
+      description: "Delay a function until after N milliseconds of silence. Great for search inputs.",
+      created_at: d(2), updated_at: d(2),
+      code: "function debounce(fn, ms) {\n  let timer;\n  return (...args) => {\n    clearTimeout(timer);\n    timer = setTimeout(() => fn(...args), ms);\n  };\n}" },
+    { id: "s2", title: "Fetch JSON with async/await", language: "JavaScript", favorite: false, tags: ["api", "utils"],
+      description: "Small helper that throws on non-200 responses.",
+      created_at: d(5), updated_at: d(5),
+      code: "async function getJSON(url) {\n  const res = await fetch(url);\n  if (!res.ok) throw new Error(`HTTP ${res.status}`);\n  return res.json();\n}" },
+    { id: "s3", title: "Read a CSV with pandas", language: "Python", favorite: false, tags: ["data"],
+      description: "Load a CSV, parse dates, and preview the first rows.",
+      created_at: d(9), updated_at: d(9),
+      code: "import pandas as pd\n\ndf = pd.read_csv('sales.csv', parse_dates=['date'])\nprint(df.head())\nprint(df.describe())" },
+    { id: "s4", title: "Minimal Flask route", language: "Python", favorite: false, tags: ["web", "api"],
+      description: "The smallest possible JSON endpoint.",
+      created_at: d(12), updated_at: d(12),
+      code: "from flask import Flask, jsonify\n\napp = Flask(__name__)\n\n@app.get('/health')\ndef health():\n    return jsonify(status='ok')" },
+    { id: "s5", title: "Top 10 customers by revenue", language: "SQL", favorite: true, tags: ["analytics"],
+      description: "Group orders by customer and take the biggest spenders.",
+      created_at: d(3), updated_at: d(3),
+      code: "SELECT c.name,\n       SUM(o.total) AS revenue\nFROM customers c\nJOIN orders o ON o.customer_id = c.id\nWHERE o.created_at >= NOW() - INTERVAL '30 days'\nGROUP BY c.name\nORDER BY revenue DESC\nLIMIT 10;" },
+    { id: "s6", title: "Undo last commit (keep changes)", language: "Shell", favorite: false, tags: ["git"],
+      description: "Moves HEAD back one commit but leaves your files untouched.",
+      created_at: d(1), updated_at: d(1),
+      code: "git reset --soft HEAD~1\n# your changes stay staged, ready to re-commit" },
+    { id: "s7", title: "Center a div (modern)", language: "CSS", favorite: false, tags: ["layout"],
+      description: "Grid-based centering, no flexbox needed.",
+      created_at: d(20), updated_at: d(20),
+      code: ".center {\n  display: grid;\n  place-items: center;\n  min-height: 100vh;\n}" },
+    { id: "s8", title: "Docker compose service block", language: "Shell", favorite: false, tags: ["devops", "config"],
+      description: "A small Postgres service with a healthcheck.",
+      created_at: d(15), updated_at: d(15),
+      code: "services:\n  db:\n    image: postgres:16\n    environment:\n      POSTGRES_PASSWORD: secret\n    ports:\n      - '5432:5432'" },
+    { id: "s9", title: "Semantic HTML page shell", language: "HTML", favorite: false, tags: ["layout"],
+      description: "Boilerplate with header, main and footer landmarks.",
+      created_at: d(30), updated_at: d(30),
+      code: "<!DOCTYPE html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"utf-8\" />\n    <title>Page</title>\n  </head>\n  <body>\n    <header></header>\n    <main></main>\n    <footer></footer>\n  </body>\n</html>" }
+  ];
+}
+
+let snippets = [];
+let currentUser = null;
+let unsubSnippets = null;
+let state = { screen: "library", id: null, lang: "all", tag: null, q: "" };
+
+/* ---------- firestore ---------- */
+const snipCol = () => collection(db, "users", currentUser.uid, "snippets");
+const snipDoc = (id) => doc(db, "users", currentUser.uid, "snippets", id);
+
+/* Write one snippet. The doc id IS the snippet id, so we don't store it as a field. */
+async function persist(s) {
+  const { id, ...data } = s;
+  await setDoc(snipDoc(id), data);
+}
+
+/* ---------- highlighting ---------- */
+const KEYWORDS = {
+  JavaScript: ["function","return","const","let","var","async","await","if","else","new","throw","class","import","from","export","default","try","catch","finally","of","in","typeof","this"],
+  Python: ["import","from","def","return","if","else","elif","for","while","in","not","and","or","class","with","as","print","True","False","None","try","except","finally","lambda","yield"],
+  SQL: ["SELECT","FROM","WHERE","JOIN","LEFT","RIGHT","INNER","ON","GROUP","BY","ORDER","DESC","ASC","LIMIT","INSERT","INTO","VALUES","UPDATE","SET","DELETE","AS","SUM","COUNT","AVG","NOW","INTERVAL","AND","OR","NOT","NULL"],
+  Shell: ["cd","ls","git","docker","npm","sudo","echo","export","if","then","fi","for","do","done","services","image","environment","ports"],
+  CSS: ["display","grid","place-items","min-height","color","background","margin","padding","flex","position","border-radius"],
+  HTML: ["DOCTYPE","html","head","body","meta","title","header","main","footer","lang","charset"]
+};
+
+function esc(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function highlight(code, lang) {
+  const kw = KEYWORDS[lang] || [];
+  const re = /(\/\/[^\n]*|#[^\n]*|--[^\n]*)|("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*')|\b(\d+(?:\.\d+)?)\b|\b([A-Za-z_$][\w$-]*)\b/g;
+  let out = "", last = 0, m;
+  while ((m = re.exec(code))) {
+    out += esc(code.slice(last, m.index));
+    if (m[1]) out += '<span class="tok-com">' + esc(m[1]) + "</span>";
+    else if (m[2]) out += '<span class="tok-str">' + esc(m[2]) + "</span>";
+    else if (m[3]) out += '<span class="tok-num">' + esc(m[3]) + "</span>";
+    else if (m[4]) out += (kw.includes(m[4]) ? '<span class="tok-kw">' + esc(m[4]) + "</span>" : esc(m[4]));
+    last = re.lastIndex;
+  }
+  out += esc(code.slice(last));
+  return out;
+}
+function codeBlock(code, lang) {
+  const lines = highlight(code, lang).split("\n");
+  const body = lines.map((l, i) =>
+    '<div class="line"><span class="ln">' + (i + 1) + '</span><span class="lc">' + (l || " ") + "</span></div>"
+  ).join("");
+  return '<div class="cb-body">' + body + "</div>";
+}
+
+/* ---------- helpers ---------- */
+function timeAgo(iso) {
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return "just now";
+  const m = Math.floor(s / 60), h = Math.floor(m / 60), d = Math.floor(h / 24);
+  if (m < 60) return m + " min ago";
+  if (h < 24) return h + " hour" + (h > 1 ? "s" : "") + " ago";
+  if (d < 30) return d + " day" + (d > 1 ? "s" : "") + " ago";
+  return Math.floor(d / 30) + " month" + (Math.floor(d / 30) > 1 ? "s" : "") + " ago";
+}
+function uid() { return "s" + Math.random().toString(36).slice(2, 9); }
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.classList.remove("show"), 1600);
+}
+function copy(text, msg) {
+  navigator.clipboard.writeText(text).then(
+    () => toast(msg),
+    () => {
+      const ta = document.createElement("textarea");
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      document.execCommand("copy"); ta.remove(); toast(msg);
+    }
+  );
+}
+function normTags(str) {
+  return str.split(",").map(t => t.trim().replace(/^#/, "")).filter(Boolean);
+}
+
+/* ---------- filtering ---------- */
+function visibleSnippets() {
+  let list = snippets.slice();
+  if (state.lang !== "all") list = list.filter(s => s.language === state.lang);
+  if (state.tag) list = list.filter(s => s.tags.includes(state.tag));
+  if (state.q) {
+    const q = state.q.toLowerCase();
+    list = list.filter(s =>
+      s.title.toLowerCase().includes(q) ||
+      s.code.toLowerCase().includes(q) ||
+      s.description.toLowerCase().includes(q) ||
+      s.tags.some(t => t.includes(q))
+    );
+  }
+  list.sort((a, b) => (b.favorite - a.favorite) || (new Date(b.updated_at) - new Date(a.updated_at)));
+  return list;
+}
+
+/* ---------- screens ---------- */
+function onSearch(v) { state.q = v; if (state.screen !== "library") state.screen = "library"; render(); }
+async function doSignOut() {
+  try { await signOut(auth); } catch (e) { toast("Sign out failed"); }
+}
+function setLang(l) { state.lang = l; state.tag = null; state.screen = "library"; render(); }
+function setTag(t) { state.tag = (state.tag === t ? null : t); state.lang = "all"; state.screen = "library"; render(); }
+function openSnippet(id) { state.screen = "detail"; state.id = id; render(); }
+function openEditor(id) {
+  state.screen = "editor";
+  state.editingId = id || null;
+  if (id) { const s = snippets.find(x => x.id === id); state.draft = { ...s, tagsText: s.tags.join(", ") }; }
+  else state.draft = { title: "", language: "JavaScript", tagsText: "", description: "", code: "" };
+  render();
+}
+async function toggleStar(id, e) {
+  if (e) e.stopPropagation();
+  const s = snippets.find(x => x.id === id);
+  if (!s) return;
+  s.favorite = !s.favorite;
+  render();
+  try { await persist(s); } catch (err) { toast("Could not update favourite"); }
+}
+async function deleteSnippet(id) {
+  if (!confirm("Delete this snippet?")) return;
+  try {
+    await deleteDoc(snipDoc(id));
+    state.screen = "library"; render(); toast("Deleted");
+  } catch (e) { toast("Could not delete"); }
+}
+async function saveSnippet() {
+  const d = state.draft;
+  if (!d.title.trim()) { toast("Give it a title first"); return; }
+  const tags = normTags(d.tagsText || "");
+  const now = new Date().toISOString();
+  const isEdit = !!state.editingId;
+  let s;
+  if (isEdit) {
+    const existing = snippets.find(x => x.id === state.editingId) || { id: state.editingId };
+    s = { ...existing, id: state.editingId, title: d.title.trim(), language: d.language, tags,
+          description: d.description.trim(), code: d.code, updated_at: now };
+  } else {
+    s = { id: uid(), title: d.title.trim(), language: d.language, tags,
+          description: d.description.trim(), code: d.code, favorite: false,
+          created_at: now, updated_at: now };
+  }
+  try {
+    await persist(s);
+    state.editingId = null;
+    state.screen = "detail"; state.id = s.id; render();
+    toast(isEdit ? "Saved" : "Snippet added");
+  } catch (e) { toast("Could not save: " + (e.code || e.message)); }
+}
+async function loadExamples() {
+  if (!currentUser) return;
+  if (snippets.length && !confirm("Add the example snippets to your vault?")) return;
+  try {
+    await Promise.all(seed().map(s => persist(s)));
+    toast("Examples added");
+  } catch (e) { toast("Could not add examples: " + (e.code || e.message)); }
+}
+function toggleTheme() {
+  document.body.classList.toggle("light");
+  try { localStorage.setItem("snippetvault:theme", document.body.classList.contains("light") ? "light" : "dark"); } catch (e) {}
+}
+
+/* ---------- render ---------- */
+function render() {
+  renderSidebar();
+  const v = document.getElementById("view");
+  if (state.screen === "library") v.innerHTML = viewLibrary();
+  else if (state.screen === "detail") v.innerHTML = viewDetail();
+  else if (state.screen === "editor") { v.innerHTML = viewEditor(); wireEditor(); }
+}
+
+function renderSidebar() {
+  const sb = document.getElementById("sidebar");
+  const countLang = (l) => snippets.filter(s => s.language === l).length;
+  const tagCounts = {};
+  snippets.forEach(s => s.tags.forEach(t => tagCounts[t] = (tagCounts[t] || 0) + 1));
+  const langsUsed = LANGUAGES.filter(l => countLang(l) > 0);
+
+  let html = '<div class="side-group"><h3>Library</h3>';
+  html += `<button class="side-item ${state.lang === "all" && !state.tag ? "active" : ""}" onclick="setLang('all')">
+             <span>All snippets</span><span class="count">${snippets.length}</span></button>`;
+  html += `<button class="side-item ${snippets.some(s=>s.favorite) ? "" : ""}" onclick="setLang('all')">
+             <span>⭐ Favourites</span><span class="count">${snippets.filter(s => s.favorite).length}</span></button>`;
+  html += "</div>";
+
+  html += '<div class="side-group"><h3>Languages</h3>';
+  langsUsed.forEach(l => {
+    html += `<button class="side-item ${state.lang === l ? "active" : ""}" onclick="setLang('${l}')">
+               <span>${l}</span><span class="count">${countLang(l)}</span></button>`;
+  });
+  html += "</div>";
+
+  const tags = Object.keys(tagCounts).sort();
+  if (tags.length) {
+    html += '<div class="side-group"><h3>Tags</h3>';
+    tags.forEach(t => {
+      html += `<button class="side-item ${state.tag === t ? "active" : ""}" onclick="setTag('${t}')">
+                 <span class="tag-name">#${t}</span><span class="count">${tagCounts[t]}</span></button>`;
+    });
+    html += "</div>";
+  }
+
+  html += `<div class="side-group">
+    <button class="side-item" onclick="loadExamples()"><span>✨ Load example snippets</span></button>
+    <button class="side-item" onclick="doSignOut()"><span class="tag-name">↩ Sign out${currentUser && currentUser.email ? " — " + esc(currentUser.email) : ""}</span></button>
+  </div>`;
+  sb.innerHTML = html;
+}
+
+function viewLibrary() {
+  const list = visibleSnippets();
+  let heading = "All snippets";
+  if (state.q) heading = 'Results for “' + state.q + '”';
+  else if (state.tag) heading = "Tag #" + state.tag;
+  else if (state.lang !== "all") heading = state.lang;
+
+  let html = `<div class="content-head"><h2>${esc(heading)}</h2><span class="sub">${list.length} snippet${list.length === 1 ? "" : "s"}</span></div>`;
+  if (!list.length) {
+    html += '<div class="empty">Nothing here yet. Hit <strong>+ New</strong> to add your first snippet.</div>';
+    return html;
+  }
+  html += '<div class="cards">';
+  list.forEach(s => {
+    html += `<div class="card" onclick="openSnippet('${s.id}')">
+      <div class="row1">
+        <span class="title">${esc(s.title)}</span>
+        <button class="star ${s.favorite ? "on" : ""}" title="Favourite" onclick="toggleStar('${s.id}', event)">${s.favorite ? "★" : "☆"}</button>
+      </div>
+      ${s.description ? `<div class="desc">${esc(s.description)}</div>` : ""}
+      <div class="meta">
+        <span class="lang-badge">${esc(s.language)}</span>
+        ${s.tags.slice(0, 3).map(t => `<span class="chip">#${esc(t)}</span>`).join("")}
+        <span class="chip" style="margin-left:auto">${timeAgo(s.updated_at)}</span>
+      </div>
+    </div>`;
+  });
+  html += "</div>";
+  return html;
+}
+
+function viewDetail() {
+  const s = snippets.find(x => x.id === state.id);
+  if (!s) return '<div class="empty">Snippet not found.</div>';
+  const md = "```" + s.language.toLowerCase() + "\n" + s.code + "\n```";
+  return `
+    <button class="back" onclick="state.screen='library';render()">← Back to library</button>
+    <div class="detail-head">
+      <div>
+        <h2>${esc(s.title)}</h2>
+        <div class="detail-meta">
+          <span class="lang-badge">${esc(s.language)}</span>
+          ${s.tags.map(t => `<span class="chip">#${esc(t)}</span>`).join("")}
+          <span class="chip">saved ${timeAgo(s.updated_at)}</span>
+        </div>
+      </div>
+      <div class="detail-actions">
+        <button class="btn" onclick="toggleStar('${s.id}')">${s.favorite ? "★ Favourited" : "☆ Favourite"}</button>
+        <button class="btn" onclick="openEditor('${s.id}')">Edit</button>
+        <button class="btn btn-danger" onclick="deleteSnippet('${s.id}')">Delete</button>
+      </div>
+    </div>
+    ${s.description ? `<p class="notes">${esc(s.description)}</p>` : ""}
+    <div class="codeblock">
+      <div class="cb-head">
+        <span>${esc(s.language)}</span>
+        <span style="margin-left:auto"></span>
+        <button class="btn" onclick="copy(\`${s.code.replace(/`/g, "\\`").replace(/\$/g, "\\$")}\`, 'Copied!')">Copy</button>
+        <button class="btn" onclick="copy(\`${md.replace(/`/g, "\\`").replace(/\$/g, "\\$")}\`, 'Copied as Markdown!')">Copy as Markdown</button>
+      </div>
+      ${codeBlock(s.code, s.language)}
+    </div>`;
+}
+
+function viewEditor() {
+  const isEdit = !!state.editingId;
+  const d = state.draft;
+  return `
+    <button class="back" onclick="${isEdit ? `openSnippet('${state.editingId}')` : "state.screen='library';render()"}">← Cancel</button>
+    <div class="content-head"><h2>${isEdit ? "Edit snippet" : "New snippet"}</h2></div>
+    <div class="editor-grid">
+      <div class="form-row">
+        <label class="field"><span>Title</span>
+          <input type="text" id="f-title" value="${esc(d.title)}" placeholder="e.g. Debounce function" /></label>
+        <label class="field"><span>Language</span>
+          <select id="f-lang">
+            ${LANGUAGES.map(l => `<option ${l === d.language ? "selected" : ""}>${l}</option>`).join("")}
+          </select></label>
+      </div>
+      <label class="field"><span>Tags <span class="hint">(comma separated)</span></span>
+        <input type="text" id="f-tags" value="${esc(d.tagsText || "")}" placeholder="utils, api" /></label>
+      <label class="field"><span>Notes <span class="hint">(optional)</span></span>
+        <input type="text" id="f-desc" value="${esc(d.description)}" placeholder="What is this for?" /></label>
+      <div>
+        <div class="hint" style="margin-bottom:6px">Code</div>
+        <textarea class="code-input" id="f-code" spellcheck="false" placeholder="Paste your code here…">${esc(d.code)}</textarea>
+      </div>
+      <div class="preview-label">Live preview</div>
+      <div class="codeblock" id="preview"></div>
+      <div class="editor-actions">
+        <button class="btn" onclick="${isEdit ? `openSnippet('${state.editingId}')` : "state.screen='library';render()"}">Cancel</button>
+        <button class="btn btn-primary" onclick="saveSnippet()">${isEdit ? "Save changes" : "Save snippet"}</button>
+      </div>
+    </div>`;
+}
+
+function wireEditor() {
+  const code = document.getElementById("f-code");
+  const lang = document.getElementById("f-lang");
+  const sync = () => {
+    state.draft.code = code.value;
+    document.getElementById("preview").innerHTML = codeBlock(code.value || " ", lang.value);
+  };
+  code.addEventListener("input", sync);
+  lang.addEventListener("change", sync);
+  document.getElementById("f-title").addEventListener("input", e => state.draft.title = e.target.value);
+  document.getElementById("f-tags").addEventListener("input", e => state.draft.tagsText = e.target.value);
+  document.getElementById("f-desc").addEventListener("input", e => state.draft.description = e.target.value);
+  lang.addEventListener("change", e => state.draft.language = e.target.value);
+  sync();
+}
+
+/* keyboard: "/" focuses search */
+document.addEventListener("keydown", e => {
+  if (e.key === "/" && document.activeElement.tagName !== "INPUT" && document.activeElement.tagName !== "TEXTAREA") {
+    const s = document.getElementById("search");
+    if (s && !document.getElementById("app").classList.contains("hidden")) { e.preventDefault(); s.focus(); }
+  }
+});
+
+/* restore theme */
+try {
+  if (localStorage.getItem("snippetvault:theme") === "light") document.body.classList.add("light");
+} catch (e) {}
+
+/* ---------- auth UI ---------- */
+let authMode = "signin";
+function setAuthMode(mode) {
+  authMode = mode;
+  const up = mode === "signup";
+  document.getElementById("authSub").textContent = up ? "Create your vault" : "Sign in to sync your snippets";
+  document.getElementById("authBtn").textContent = up ? "Create account" : "Sign in";
+  document.getElementById("authToggle").textContent = up ? "I already have an account" : "Create an account";
+  document.getElementById("authNote").textContent = up
+    ? "Pick any password with 6 or more characters."
+    : "Your snippets sync across every device you sign in on.";
+}
+document.getElementById("authToggle").addEventListener("click",
+  () => setAuthMode(authMode === "signin" ? "signup" : "signin"));
+
+function authError(err) {
+  const map = {
+    "auth/invalid-email": "That email address doesn't look right.",
+    "auth/missing-password": "Enter your password.",
+    "auth/weak-password": "Password must be at least 6 characters.",
+    "auth/email-already-in-use": "That email already has an account — switch to Sign in.",
+    "auth/invalid-credential": "Wrong email or password.",
+    "auth/user-not-found": "No account with that email — create one first.",
+    "auth/wrong-password": "Wrong email or password.",
+    "auth/too-many-requests": "Too many attempts. Wait a minute and try again.",
+    "auth/network-request-failed": "Network error. Check your connection.",
+    "auth/operation-not-allowed": "Enable Email/Password sign-in in the Firebase console."
+  };
+  return map[err.code] || ("Sign-in failed: " + (err.code || err.message));
+}
+
+document.getElementById("loginForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const email = document.getElementById("authEmail").value.trim();
+  const pw = document.getElementById("authPw").value;
+  const note = document.getElementById("authNote");
+  const btn = document.getElementById("authBtn");
+  if (!email || !pw) { note.textContent = "Enter an email and a password."; return; }
+  btn.disabled = true;
+  note.textContent = authMode === "signup" ? "Creating your vault…" : "Signing in…";
+  try {
+    if (authMode === "signup") await createUserWithEmailAndPassword(auth, email, pw);
+    else await signInWithEmailAndPassword(auth, email, pw);
+  } catch (err) {
+    note.textContent = authError(err);
+    btn.disabled = false;
+  }
+});
+
+/* ---------- keep the UI in sync with Firestore ---------- */
+onAuthStateChanged(auth, (user) => {
+  if (unsubSnippets) { unsubSnippets(); unsubSnippets = null; }
+  currentUser = user;
+
+  if (user) {
+    document.getElementById("login").classList.add("hidden");
+    document.getElementById("app").classList.remove("hidden");
+    state.screen = "library"; state.id = null; state.lang = "all"; state.tag = null; state.q = "";
+    document.getElementById("search").value = "";
+    unsubSnippets = onSnapshot(
+      snipCol(),
+      (snap) => {
+        snippets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        render();
+      },
+      (err) => {
+        console.error(err);
+        toast(err.code === "permission-denied"
+          ? "Firestore rules blocked this — check your rules."
+          : "Could not load snippets.");
+      }
+    );
+  } else {
+    snippets = [];
+    document.getElementById("app").classList.add("hidden");
+    document.getElementById("login").classList.remove("hidden");
+    setAuthMode("signin");
+  }
+});
+
+/* Inline onclick handlers in the generated markup resolve against window. */
+Object.assign(window, {
+  setLang, setTag, openSnippet, toggleStar, openEditor, deleteSnippet,
+  loadExamples, saveSnippet, doSignOut, toggleTheme, copy, onSearch, render
+});
+window.state = state;
+</script>
+</body>
+</html>

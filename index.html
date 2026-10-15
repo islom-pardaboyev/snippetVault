@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en" data-theme="dark" data-accent="lime">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>SnippetVault</title>
+    <meta name="description" content="Your private, realtime code snippet vault." />
+    <meta name="theme-color" content="#0a0b0d" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <script>
+      // apply saved theme before first paint (no flash)
+      try {
+        var t = localStorage.getItem("sv:theme"), a = localStorage.getItem("sv:accent");
+        if (t) document.documentElement.dataset.theme = t;
+        if (a) document.documentElement.dataset.accent = a;
+        var h = localStorage.getItem("sv:accent-hex");
+        if (h && /^#[0-9a-f]{6}$/i.test(h)) document.documentElement.style.setProperty("--accent", h);
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>SnippetVault needs JavaScript.</noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
