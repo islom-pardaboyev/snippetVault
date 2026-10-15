@@ -77,7 +77,10 @@ export default function CodeEditor({ value, onChange, language, placeholder, onS
       state: EditorState.create({
         doc: value,
         extensions: [
-          keymap.of([{ key: "Mod-Enter", run: () => { cbs.current.onSubmit?.(); return true; } }]),
+          keymap.of([
+            { key: "Mod-Shift-Enter", run: () => { window.dispatchEvent(new Event("sv:run")); return true; } },
+            { key: "Mod-Enter", run: () => { cbs.current.onSubmit?.(); return true; } },
+          ]),
           lineNumbers(), highlightActiveLineGutter(), highlightActiveLine(), drawSelection(),
           history(), indentOnInput(), bracketMatching(), closeBrackets(),
           keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap, indentWithTab]),

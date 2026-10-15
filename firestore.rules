@@ -10,6 +10,13 @@ service cloud.firestore {
         && request.resource.data.name is string && request.resource.data.name.size() <= 60;
     }
 
+    match /users/{uid}/snippets/{snippetId}/images/{imageId} {
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.data is string && request.resource.data.data.size() <= 900000
+        && request.resource.data.data.matches('^data:image/.*');
+    }
+
     match /users/{uid}/snippets/{snippetId}/versions/{versionId} {
       allow read, delete: if request.auth != null && request.auth.uid == uid;
       allow create, update: if request.auth != null && request.auth.uid == uid

@@ -12,7 +12,7 @@ export function CommandPalette({ open, onClose, onSettings }: { open: boolean; o
   const input = useRef<HTMLInputElement>(null);
   const nav = useNavigate();
   const { snippets } = useSnippets();
-  const { theme, setTheme } = useTheme();
+  const { toggle: toggleTheme } = useTheme();
   const [q, setQ] = useState("");
   const [idx, setIdx] = useState(0);
 
@@ -30,7 +30,7 @@ export function CommandPalette({ open, onClose, onSettings }: { open: boolean; o
       { id: "a-lib", section: "Actions", label: "All snippets", icon: "library", run: go("/") },
       { id: "a-fav", section: "Actions", label: "Favourites", icon: "star", run: go("/favorites") },
       { id: "a-ins", section: "Actions", label: "Insights", icon: "chart", run: go("/insights") },
-      { id: "a-theme", section: "Actions", label: "Toggle light / dark", icon: "sun", run: () => setTheme(theme === "light" ? "dark" : "light") },
+      { id: "a-theme", section: "Actions", label: "Toggle light / dark  (D)", icon: "sun", run: toggleTheme },
       { id: "a-set", section: "Actions", label: "Settings", icon: "sliders", run: onSettings },
     ];
     const needle = q.trim().toLowerCase();
@@ -41,7 +41,7 @@ export function CommandPalette({ open, onClose, onSettings }: { open: boolean; o
       .map<Item>((s) => ({ id: s.id, section: "Snippets", label: s.title, sub: s.language, lang: s.language, run: go(`/s/${s.id}`) }));
     const acts = needle ? actions.filter((a) => a.label.toLowerCase().includes(needle)) : actions;
     return [...acts, ...list];
-  }, [q, snippets, nav, theme, setTheme, onSettings]);
+  }, [q, snippets, nav, toggleTheme, onSettings]);
 
   useEffect(() => setIdx(0), [q]);
 

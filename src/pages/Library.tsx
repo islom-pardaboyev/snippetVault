@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useSnippets } from "../hooks/snippets";
 import { useToast } from "../hooks/ui";
@@ -9,19 +9,25 @@ import { useModal } from "../components/Modal";
 import { Select } from "../components/Select";
 import { LangIcon } from "../components/LangIcon";
 import { GroupEditDialog } from "../components/GroupEditDialog";
+import { AddToGroupDialog } from "../components/AddToGroupDialog";
+import { useNewGroup } from "../components/NewGroupDialog";
 
 type Sort = "updated" | "created" | "title" | "language" | "size";
 const SORTS: [Sort, string][] = [["updated", "Updated"], ["created", "Newest"], ["title", "A → Z"], ["language", "Language"], ["size", "Longest"]];
 const pref = (k: string, d: string) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
 
 export function Library({ mode }: { mode: "all" | "favorites" | "lang" | "tag" | "group" }) {
-  const { snippets, loaded, saveMany, groupMeta, addGroup, renameGroup, deleteGroup, updateGroup } = useSnippets();
+  const { snippets, loaded, saveMany, remove, groupMeta, renameGroup, deleteGroup, updateGroup } = useSnippets();
   const [editGroup, setEditGroup] = useState(false);
+  const [addExisting, setAddExisting] = useState(false);
+  const [selecting, setSelecting] = useState(false);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
   const params = useParams();
   const [sp] = useSearchParams();
   const nav = useNavigate();
   const toast = useToast();
-  const { prompt, confirm } = useModal();
+  const { confirm } = useModal();
+  const [newGroup, newGroupDialog] = useNewGroup();
   const [sort, setSort] = useState<Sort>(() => pref("sv:sort", "updated") as Sort);
   const [view, setView] = useState<"grid" | "list">(() => pref("sv:view", "grid") as "grid" | "list");
   const q = (sp.get("q") ?? "").trim().toLowerCase();
@@ -61,10 +67,39 @@ export function Library({ mode }: { mode: "all" | "favorites" | "lang" | "tag" |
       .sort((a, b) => (a[0] === "Ungrouped" ? 1 : b[0] === "Ungrouped" ? -1 : a[0].localeCompare(b[0])))
       .map(([name, items]) => ({ name, items }));
   }, [list, groupBy, mode]);
+  const exitSelect = () => { setSelecting(false); setPicked(new Set()); };
+  const toggle = (id: string) => setPicked((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const allPicked = list.length > 0 && list.every((s) => picked.has(s.id));
+  const chosen = list.filter((s) => picked.has(s.id));
+  useEffect(() => { exitSelect(); }, [mode, group, lang, tag, q]);
+  useEffect(() => {
+    if (!selecting) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !document.querySelector("dialog[open]")) exitSelect(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selecting]);
+  const deleteChosen = async () => {
+    const items = chosen;
+    if (!items.length) return;
+    const ok = await confirm({ title: `Delete ${items.length} snippet${items.length > 1 ? "s" : ""}?`, description: "This removes them from your vault.", confirmLabel: "Delete", danger: true });
+    if (!ok) return;
+    items.forEach((s) => remove(s.id));
+    exitSelect();
+    toast(`${items.length} snippet${items.length > 1 ? "s" : ""} deleted`, { action: { label: "Undo", run: () => { void saveMany(items); } } });
+  };
+  const removeFromGroup = () => {
+    const now = new Date().toISOString();
+    const items = chosen;
+    void saveMany(items.map((s) => ({ ...s, group: "", updated_at: now })));
+    exitSelect();
+    toast(`${items.length} removed from group`, { action: { label: "Undo", run: () => { void saveMany(items); } } });
+  };
   const languages = useMemo(() => [...new Set(snippets.map((s) => s.language))], [snippets]);
 
   return (
     <div className="anim-rise mx-auto max-w-[1240px]">
+      {newGroupDialog}
+      {group && <AddToGroupDialog open={addExisting} group={group} onClose={() => setAddExisting(false)} />}
       {group && (
         <GroupEditDialog open={editGroup} name={group} meta={groupMeta[group] ?? {}} onClose={() => setEditGroup(false)}
           onSave={(n, m) => {
@@ -90,6 +125,7 @@ export function Library({ mode }: { mode: "all" | "favorites" | "lang" | "tag" |
               <button className="btn btn-primary flex-1 md:flex-none" onClick={() => nav(`/new?group=${encodeURIComponent(group)}`)}>
                 <Icon name="plus" size={16} /> Add snippet
               </button>
+              <button className="btn" onClick={() => setAddExisting(true)}><Icon name="library" size={16} /><span className="hidden sm:inline"> Add existing</span></button>
               <button className="btn" onClick={() => setEditGroup(true)}><Icon name="edit" size={16} /><span className="hidden sm:inline"> Edit</span></button>
               <button className="btn btn-danger btn-icon" aria-label="Delete group" onClick={async () => {
                 const ok = await confirm({ title: `Delete “${group}”?`, description: "Its snippets are kept — they just won't belong to any group.", confirmLabel: "Delete group", danger: true });
@@ -97,14 +133,21 @@ export function Library({ mode }: { mode: "all" | "favorites" | "lang" | "tag" |
               }}><Icon name="trash" size={16} /></button>
             </div>
           ) : (
-            <button className="btn hidden md:inline-flex" onClick={async () => {
-              const g = await prompt({ title: "New group", description: "A topic folder — put Python, JavaScript, HTML, CSS and terminal snippets together.", label: "Group name", placeholder: "e.g. Sorting algorithms", confirmLabel: "Create group" });
-              if (g) { addGroup(g); nav(`/group/${encodeURIComponent(g)}`); }
-            }}>
+            <button className="btn hidden md:inline-flex" onClick={newGroup}>
               <Icon name="folder" size={16} /> New group
             </button>
           )}
           <div className="flex items-center gap-2">
+            {list.length > 0 && (selecting ? (
+              <>
+                <button className="btn" onClick={() => setPicked(allPicked ? new Set() : new Set(list.map((s) => s.id)))}>
+                  <Icon name="check" size={16} /> {allPicked ? "Clear all" : "Select all"}
+                </button>
+                <button className="btn" onClick={exitSelect}>Cancel</button>
+              </>
+            ) : (
+              <button className="btn" onClick={() => setSelecting(true)}><Icon name="list" size={16} /> Select</button>
+            ))}
             {mode !== "group" && (
               <Select ariaLabel="Group by" value={groupBy} className="min-w-0 flex-1 md:w-[150px] md:flex-none" buttonClass="!px-2.5 text-[13px] md:text-sm"
                 onChange={(v) => setP("sv:groupby", v, setGroupBy)}
@@ -148,7 +191,7 @@ export function Library({ mode }: { mode: "all" | "favorites" | "lang" | "tag" |
           {Array.from({ length: 6 }).map((_, i) => <div key={i} className="skeleton h-[210px] rounded-card border border-line" />)}
         </div>
       ) : list.length === 0 ? (
-        <Empty q={q} hasAny={snippets.length > 0} group={group} onNew={() => nav(group ? `/new?group=${encodeURIComponent(group)}` : "/new")}
+        <Empty q={q} hasAny={snippets.length > 0} group={group} onExisting={() => setAddExisting(true)} onNew={() => nav(group ? `/new?group=${encodeURIComponent(group)}` : "/new")}
           onExamples={async () => { await saveMany(seedSnippets()); toast("Examples added"); }} />
       ) : (
         <div className="grid gap-8">
@@ -161,17 +204,27 @@ export function Library({ mode }: { mode: "all" | "favorites" | "lang" | "tag" |
                 </h2>
               )}
               <div className={view === "grid" ? "grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))]" : "grid gap-2.5"}>
-                {sec.items.map((s, i) => <SnippetCard key={s.id} s={s} index={i} list={view === "list"} />)}
+                {sec.items.map((s, i) => <SnippetCard key={s.id} s={s} index={i} list={view === "list"} selecting={selecting} picked={picked.has(s.id)} onPick={toggle} />)}
               </div>
             </section>
           ))}
+        </div>
+      )}
+
+      {selecting && (
+        <div className="fixed inset-x-0 bottom-20 z-40 flex justify-center px-4 md:bottom-6">
+          <div className="anim-rise flex flex-wrap items-center gap-2 rounded-2xl border border-line-strong bg-surface p-2 pl-4 shadow-2xl">
+            <span className="text-sm font-semibold">{picked.size} selected</span>
+            {group && <button className="btn" disabled={!picked.size} onClick={removeFromGroup}>Remove from group</button>}
+            <button className="btn btn-danger" disabled={!picked.size} onClick={deleteChosen}><Icon name="trash" size={16} /> Delete</button>
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-function Empty({ q, hasAny, group, onNew, onExamples }: { q: string; hasAny: boolean; group?: string; onNew(): void; onExamples(): void }) {
+function Empty({ q, hasAny, group, onExisting, onNew, onExamples }: { q: string; hasAny: boolean; group?: string; onExisting(): void; onNew(): void; onExamples(): void }) {
   return (
     <div className="rounded-3xl border border-dashed border-line-strong bg-surface px-5 py-[70px] text-center">
       <div className="mx-auto mb-[18px] grid size-[54px] place-items-center rounded-2xl bg-accent/15 text-accent">
@@ -183,6 +236,7 @@ function Empty({ q, hasAny, group, onNew, onExamples }: { q: string; hasAny: boo
       </p>
       <div className="flex flex-wrap justify-center gap-2.5">
         <button className="btn btn-primary btn-lg" onClick={onNew}><Icon name="plus" /> {group ? "Add first snippet" : "New snippet"}</button>
+        {group && hasAny && !q && <button className="btn btn-lg" onClick={onExisting}><Icon name="library" /> Add existing snippets</button>}
         {!hasAny && !group && <button className="btn btn-lg" onClick={onExamples}><Icon name="sparkles" /> Add examples</button>}
       </div>
     </div>

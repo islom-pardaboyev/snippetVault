@@ -9,6 +9,11 @@ import { SnippetCard, StarButton } from "../components/SnippetCard";
 import { Icon } from "../components/Icon";
 import { NotFound } from "./NotFound";
 import { useModal } from "../components/Modal";
+import { useImageActions, useSnippetImages } from "../hooks/images";
+import { ImageGallery } from "../components/ImageGallery";
+import { RunPanel } from "../components/RunPanel";
+import { isRunnable } from "../lib/runner";
+import { MAX_IMAGES, compressFiles } from "../lib/images";
 import { Select } from "../components/Select";
 import { LangIcon } from "../components/LangIcon";
 import { copyText, downloadFile, lineCount, newId, snippetFilename, timeAgo, toMarkdown } from "../lib/utils";
@@ -23,6 +28,25 @@ export function Detail() {
   const [wrap, setWrap] = useState(false);
   const [history, setHistory] = useState(false);
   const copySnippet = useCopySnippet();
+  const { images, loading: imagesLoading } = useSnippetImages(s ? s.id : null);
+  const { add: addImage, remove: removeImage } = useImageActions();
+  const [busy, setBusy] = useState(false);
+
+  const addFiles = async (files: File[]) => {
+    if (!s || !files.length) return;
+    setBusy(true);
+    const { ok, error } = await compressFiles(files, MAX_IMAGES - images.length);
+    ok.forEach((c) => addImage(s.id, c));
+    if (ok.length) save({ ...s, image_count: images.length + ok.length });
+    setBusy(false);
+    if (error) toast(error, { kind: "err" });
+  };
+  const removeImg = (imgId: string) => {
+    if (!s) return;
+    removeImage(s.id, imgId);
+    save({ ...s, image_count: Math.max(0, images.length - 1) });
+    toast("Image removed");
+  };
 
   const copy = async (text: string, msg: string) => { if (await copyText(text)) toast(msg); };
 
@@ -43,6 +67,7 @@ export function Detail() {
       if (k === "c") copySnippet(s);
       else if (k === "e") nav(`/s/${s.id}/edit`);
       else if (k === "f") save({ ...s, favorite: !s.favorite });
+      else if (k === "r" && isRunnable(s.language)) window.dispatchEvent(new Event("sv:run"));
       else if (k === "escape") nav(-1);
     };
     window.addEventListener("keydown", onKey);
@@ -116,6 +141,24 @@ export function Detail() {
           </>}
         />
       </div>
+
+      {isRunnable(s.language) && (
+        <div className="mt-4"><RunPanel code={s.code} language={s.language} /></div>
+      )}
+
+      {(images.length > 0 || (s.image_count ?? 0) > 0 || imagesLoading) && (
+        <div className="mt-6">
+          <h2 className="mb-2.5 text-[13px] font-bold uppercase tracking-[.1em] text-faint">Images</h2>
+          <ImageGallery images={images} busy={busy || (imagesLoading && images.length === 0)} onAdd={addFiles} onRemove={removeImg} />
+        </div>
+      )}
+      {images.length === 0 && (s.image_count ?? 0) === 0 && !imagesLoading && (
+        <div className="mt-4">
+          <button className="btn" onClick={() => document.getElementById("detail-add-image")?.click()}><Icon name="image" size={16} /> Add image</button>
+          <input id="detail-add-image" type="file" accept="image/*" multiple hidden
+            onChange={(e) => { addFiles([...(e.target.files ?? [])]); e.target.value = ""; }} />
+        </div>
+      )}
 
       <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
         {[

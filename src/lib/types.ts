@@ -4,6 +4,7 @@ export interface Snippet {
   language: string;
   favorite: boolean;
   group?: string;
+  image_count?: number;
   tags: string[];
   description: string;
   code: string;
@@ -25,4 +26,13 @@ export interface Version {
   tags: string[];
   code: string;
   saved_at: string;
+}
+
+export interface SnippetImage {
+  id: string;
+  data: string;       // base64 data URL
+  w: number;
+  h: number;
+  size: number;
+  created_at: string;
 }

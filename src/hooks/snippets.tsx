@@ -43,6 +43,7 @@ export function SnippetsProvider({ children }: { children: ReactNode }) {
   const [pending, setPending] = useState(false);
   const [fromCache, setFromCache] = useState(true);
   const uid = user?.uid ?? null;
+  const imgDelete = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const snapshots = useRef(snippets);
   snapshots.current = snippets;
 
@@ -90,6 +91,8 @@ export function SnippetsProvider({ children }: { children: ReactNode }) {
 
   /* ---- snippets ---- */
   const save = useCallback((s: Snippet) => {
+    const t = imgDelete.current.get(s.id);
+    if (t) { clearTimeout(t); imgDelete.current.delete(s.id); } // snippet restored (Undo)
     setSnippets((l) => (l.some((x) => x.id === s.id) ? l.map((x) => (x.id === s.id ? s : x)) : [...l, s]));
     if (!uid) return;
     const { id, ...data } = s;
@@ -98,9 +101,21 @@ export function SnippetsProvider({ children }: { children: ReactNode }) {
   }, [uid, fail]);
 
   const remove = useCallback((id: string) => {
+    const hadImages = (snapshots.current.find((x) => x.id === id)?.image_count ?? 0) > 0;
     setSnippets((l) => l.filter((x) => x.id !== id));
     if (!uid) return;
     deleteDoc(doc(db, "users", uid, "snippets", id)).catch(fail);
+    if (hadImages) {
+      // wait out the Undo window, then remove the orphaned images
+      imgDelete.current.set(id, setTimeout(() => {
+        imgDelete.current.delete(id);
+        getDocs(collection(db, "users", uid, "snippets", id, "images")).then((snap) => {
+          const b = writeBatch(db);
+          snap.docs.forEach((d) => b.delete(d.ref));
+          return b.commit();
+        }).catch(fail);
+      }, 8000));
+    }
   }, [uid, fail]);
 
   const saveMany = useCallback(async (list: Snippet[]) => {

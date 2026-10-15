@@ -20,22 +20,27 @@ export function StarButton({ s }: { s: Snippet }) {
   );
 }
 
-export function SnippetCard({ s, index = 0, list = false }: { s: Snippet; index?: number; list?: boolean }) {
+export function SnippetCard({ s, index = 0, list = false, selecting = false, picked = false, onPick }: { s: Snippet; index?: number; list?: boolean; selecting?: boolean; picked?: boolean; onPick?(id: string): void }) {
   const nav = useNavigate();
   const copy = useCopySnippet();
   const preview = highlightLines(s.code.split("\n").slice(0, 6).join("\n"), s.language);
-  const open = () => nav(`/s/${s.id}`);
+  const open = () => (selecting ? onPick?.(s.id) : nav(`/s/${s.id}`));
 
   return (
     <article
-      role="link" tabIndex={0} onClick={open} draggable
+      role={selecting ? "checkbox" : "link"} aria-checked={selecting ? picked : undefined} tabIndex={0} onClick={open} draggable={!selecting}
       onDragStart={(e) => { e.dataTransfer.setData("text/x-snippet-id", s.id); e.dataTransfer.effectAllowed = "move"; }}
-      onKeyDown={(e) => { if (e.key === "Enter") open(); }}
+      onKeyDown={(e) => { if (e.key === "Enter" || (selecting && e.key === " ")) { e.preventDefault(); open(); } }}
       style={{ animationDelay: `${Math.min(index, 12) * 28}ms` }}
-      className={`group anim-rise relative cursor-pointer rounded-card border border-line bg-surface p-4 transition duration-200 hover:-translate-y-0.5 hover:border-line-strong hover:shadow-[0_18px_40px_-22px_rgba(0,0,0,.6)] ${list ? "flex items-center gap-4 py-3" : "flex flex-col gap-3"}`}
+      className={`group anim-rise relative cursor-pointer rounded-card border ${picked ? "border-accent ring-2 ring-accent/40" : "border-line"} bg-surface p-4 transition duration-200 hover:-translate-y-0.5 hover:border-line-strong hover:shadow-[0_18px_40px_-22px_rgba(0,0,0,.6)] ${list ? "flex items-center gap-4 py-3" : "flex flex-col gap-3"}`}
     >
       <div className={list ? "min-w-0 flex-1" : "contents"}>
         <div className="flex items-center gap-2 text-[12.5px] font-semibold text-muted">
+          {selecting && (
+            <span aria-hidden className={`grid size-5 shrink-0 place-items-center rounded-md border ${picked ? "border-accent bg-accent text-[var(--accent-ink)]" : "border-line-strong"}`}>
+              {picked && <Icon name="check" size={14} />}
+            </span>
+          )}
           <LangIcon lang={s.language} size={17} />
           {s.language}
           {!list && <span className="ml-auto"><StarButton s={s} /></span>}
@@ -50,6 +55,7 @@ export function SnippetCard({ s, index = 0, list = false }: { s: Snippet; index?
         <div className="mt-auto flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-faint">
           {s.tags.slice(0, 3).map((t) => <span key={t} className="text-[12.5px] text-muted">#{t}</span>)}
           <span>{timeAgo(s.updated_at)}</span>
+          {(s.image_count ?? 0) > 0 && <span className="inline-flex items-center gap-1 text-muted" title="Has images"><Icon name="image" size={13} />{s.image_count}</span>}
           {!list && (
             <button
               onClick={(e) => { e.stopPropagation(); copy(s); }}

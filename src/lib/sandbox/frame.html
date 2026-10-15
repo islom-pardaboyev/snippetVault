@@ -1,0 +1,28 @@
+<!doctype html>
+<meta charset="utf-8">
+<script>
+  var WORKER_SRC = __WORKER_SRC__;
+  var blobUrl = URL.createObjectURL(new Blob([WORKER_SRC], { type: "text/javascript" }));
+  var py = null;
+  function send(m) { parent.postMessage(m, "*"); }
+  function make(persistent) {
+    var w = new Worker(blobUrl);
+    w.onmessage = function (ev) {
+      send(ev.data);
+      if (ev.data && ev.data.t === "done" && !persistent) w.terminate();
+    };
+    w.onerror = function (ev) {
+      send({ t: "log", level: "error", text: ev.message || "Worker error" });
+      send({ t: "done" });
+    };
+    return w;
+  }
+  addEventListener("message", function (e) {
+    var m = e.data;
+    if (!m || m.type !== "run") return;
+    var w;
+    if (m.kind === "py") { if (!py) py = make(true); w = py; } else { w = make(false); }
+    w.postMessage(m);
+  });
+  send({ t: "ready" });
+</script>

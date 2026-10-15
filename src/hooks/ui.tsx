@@ -24,6 +24,7 @@ export function useOnline() {
 interface ThemeCtx {
   theme: ThemeMode; accent: Accent; accentHex: string; customColor: string;
   setTheme(t: ThemeMode): void; setAccent(a: Accent): void; setCustomColor(hex: string): void;
+  isLight: boolean; toggle(): void;
 }
 const ThemeContext = createContext<ThemeCtx | null>(null);
 
@@ -51,7 +52,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     } catch { /* private mode */ }
   }, [theme, accent, accentHex, customColor]);
   const setCustomColor = useCallback((hex: string) => { if (isHex(hex)) { setCustomState(hex); setAccentState("custom"); } }, []);
-  const value = useMemo<ThemeCtx>(() => ({ theme, accent, accentHex, customColor, setTheme: setThemeState, setAccent: setAccentState, setCustomColor }), [theme, accent, accentHex, customColor, setCustomColor]);
+  const isLight = theme === "light" || (theme === "system" && typeof matchMedia !== "undefined" && matchMedia("(prefers-color-scheme: light)").matches);
+  const toggle = useCallback(() => setThemeState(isLight ? "dark" : "light"), [isLight]);
+  const value = useMemo<ThemeCtx>(() => ({ theme, accent, accentHex, customColor, setTheme: setThemeState, setAccent: setAccentState, setCustomColor, isLight, toggle }), [theme, accent, accentHex, customColor, setCustomColor, isLight, toggle]);
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 export function useTheme() {

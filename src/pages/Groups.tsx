@@ -1,17 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useSnippets } from "../hooks/snippets";
 import { useToast } from "../hooks/ui";
-import { useModal } from "../components/Modal";
+import { useNewGroup } from "../components/NewGroupDialog";
 import { Icon } from "../components/Icon";
 import { LangIcon } from "../components/LangIcon";
 import { timeAgo } from "../lib/utils";
 
 export function Groups() {
-  const { groups, groupMeta, snippets, addGroup, deleteGroups } = useSnippets();
-  const { prompt } = useModal();
+  const { groups, groupMeta, snippets, deleteGroups } = useSnippets();
+  const [create, newGroupDialog] = useNewGroup();
   const toast = useToast();
-  const nav = useNavigate();
   const [selecting, setSelecting] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [confirm, setConfirm] = useState(false);
@@ -55,13 +54,9 @@ export function Groups() {
     toast(`${names.length} group${names.length > 1 ? "s" : ""} deleted${withSnippets ? " with their snippets" : ""}`);
   };
 
-  const create = async () => {
-    const g = await prompt({ title: "New group", description: "A topic folder — put Python, JavaScript, HTML, CSS and terminal snippets together.", label: "Group name", placeholder: "e.g. Sorting algorithms", confirmLabel: "Create group" });
-    if (g) { addGroup(g); nav(`/group/${encodeURIComponent(g)}`); }
-  };
-
   return (
     <div className="anim-rise mx-auto max-w-[1240px]">
+      {newGroupDialog}
       <div className="mb-6 flex flex-wrap items-end gap-3.5">
         <div>
           <h1 className="text-[clamp(26px,3.2vw,36px)] font-bold leading-[1.1] tracking-[-0.04em]">Groups</h1>
