@@ -7,7 +7,7 @@ import { projectId } from "../lib/firebase";
 import { Icon } from "../components/Icon";
 
 const UNLOCK_KEY = "sv:admin-unlocked";
-const PASSCODE_HASH = (import.meta.env.VITE_ADMIN_PASSCODE_SHA256 ?? "").trim().toLowerCase();
+const PASSCODE_HASH = __ADMIN_HASH__;
 
 async function sha256Hex(text: string) {
   const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
@@ -42,9 +42,9 @@ function Passcode({ onOk }: { onOk(): void }) {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!PASSCODE_HASH) return setErr("Admin passcode isn't configured (VITE_ADMIN_PASSCODE_SHA256).");
+    if (!PASSCODE_HASH) return setErr("Admin passcode isn't configured (set ADMIN_PASSCODE in .env, then rebuild).");
     setBusy(true);
-    const ok = (await sha256Hex(code)) === PASSCODE_HASH;
+    const ok = (await sha256Hex(code.trim())) === PASSCODE_HASH;
     setBusy(false);
     if (ok) onOk(); else { setErr("Wrong passcode."); setCode(""); }
   };

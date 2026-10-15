@@ -18,7 +18,7 @@ npm run dev        # http://localhost:5173
 
 ## Admin page (optional)
 
-Copy `.env.example` to `.env.local` and set `VITE_ADMIN_EMAIL` and `VITE_ADMIN_PASSCODE_SHA256`. Restart `npm run dev` after changing them.
+Copy `.env.example` to `.env.local` and set `VITE_ADMIN_EMAIL` and `ADMIN_PASSCODE`. Restart `npm run dev` after changing them.
 
 ## Deploy
 

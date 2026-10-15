@@ -130,7 +130,7 @@ export function Editor() {
       <h1 className="mb-6 text-[clamp(26px,3.2vw,36px)] font-bold tracking-[-0.04em]">{existing ? "Edit snippet" : "New snippet"}</h1>
 
       <div className="grid items-start gap-7 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
-        <div className="grid min-w-0 gap-4">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
           <div className="grid gap-3.5 sm:grid-cols-[1fr_190px]">
             <label><span className={label}>Title</span>
               <input autoFocus={!existing} className={input} value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="e.g. Debounce function" maxLength={200} /></label>
@@ -186,8 +186,8 @@ export function Editor() {
 
         <div className="min-w-0 lg:sticky lg:top-[84px]">
           <div className="mb-2 text-[11px] font-bold uppercase tracking-[.1em] text-faint">Live preview</div>
-          <div className="max-h-[46vh] overflow-auto rounded-card">
-            <CodeBlock code={form.code || "// your code appears here"} lang={form.language} title={form.title || "untitled"} />
+          <div className="max-h-[46vh] overflow-auto rounded-card border border-line-strong shadow-[0_18px_40px_-22px_rgba(0,0,0,.6)]">
+            <CodeBlock bare code={form.code || "// your code appears here"} lang={form.language} title={form.title || "untitled"} />
           </div>
           <div className="mt-6 hidden lg:block">
             <div className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[.1em] text-faint">

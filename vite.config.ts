@@ -1,9 +1,22 @@
-import { defineConfig } from "vite";
+import { createHash } from "node:crypto";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { VitePWA } from "vite-plugin-pwa";
 
-export default defineConfig({
+/**
+ * Admin passcode: write it as plain text in .env as ADMIN_PASSCODE. It is hashed here,
+ * at build time, so only its SHA-256 is shipped in the site's JavaScript.
+ */
+function passcodeHash(mode: string): string {
+  const env = loadEnv(mode, process.cwd(), "");
+  const raw = (env.ADMIN_PASSCODE || "").trim();
+  if (!raw) return "";
+  return /^[0-9a-f]{64}$/i.test(raw) ? raw.toLowerCase() : createHash("sha256").update(raw).digest("hex");
+}
+
+export default defineConfig(({ mode }) => ({
+  define: { __ADMIN_HASH__: JSON.stringify(passcodeHash(mode)) },
   plugins: [
     react(),
     tailwindcss(),
@@ -41,4 +54,4 @@ export default defineConfig({
       },
     }),
   ],
-});
+}));

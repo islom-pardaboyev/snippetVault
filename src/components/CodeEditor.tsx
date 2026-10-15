@@ -41,7 +41,7 @@ const highlight = HighlightStyle.define([
 ]);
 
 const theme = EditorView.theme({
-  "&": { backgroundColor: "var(--surface-2)", color: "var(--text)", border: "1px solid var(--line)", borderRadius: "10px", fontSize: "13.5px" },
+  "&": { maxWidth: "100%", backgroundColor: "var(--surface-2)", color: "var(--text)", border: "1px solid var(--line)", borderRadius: "10px", fontSize: "13.5px" },
   "&.cm-focused": { outline: "none", borderColor: "var(--accent)", boxShadow: "0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent)" },
   ".cm-scroller": { fontFamily: "var(--font-mono)", lineHeight: "1.7", minHeight: "340px", maxHeight: "70vh", overflow: "auto" },
   ".cm-content": { caretColor: "var(--accent)", padding: "10px 0" },
@@ -111,5 +111,5 @@ export default function CodeEditor({ value, onChange, language, placeholder, onS
     if (v && value !== v.state.doc.toString()) v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: value } });
   }, [value]);
 
-  return <div ref={host} />;
+  return <div ref={host} className="min-w-0 max-w-full" />;
 }

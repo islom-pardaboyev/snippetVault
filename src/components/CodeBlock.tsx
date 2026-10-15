@@ -18,10 +18,10 @@ export function CodeLines({ code, lang, wrap = false, max }: { code: string; lan
   );
 }
 
-export function CodeBlock({ code, lang, wrap, title, actions }: { code: string; lang: string; wrap?: boolean; title?: string; actions?: ReactNode }) {
+export function CodeBlock({ code, lang, wrap, title, actions, bare }: { code: string; lang: string; wrap?: boolean; title?: string; actions?: ReactNode; bare?: boolean }) {
   return (
-    <div className="rounded-card border border-line-strong bg-bg overflow-hidden shadow-[0_18px_40px_-22px_rgba(0,0,0,.6)]">
-      <div className="flex items-center gap-2 px-3 py-2 bg-surface border-b border-line text-[12.5px] font-semibold text-muted">
+    <div className={`min-w-0 bg-bg ${bare ? "" : "overflow-hidden rounded-card border border-line-strong shadow-[0_18px_40px_-22px_rgba(0,0,0,.6)]"}`}>
+      <div className={`flex items-center gap-2 px-3 py-2 bg-surface border-b border-line text-[12.5px] font-semibold text-muted ${bare ? "sticky top-0 z-10" : ""}`}>
         <span className="inline-flex gap-1.5 mr-1.5" aria-hidden="true">
           <i className="size-2.5 rounded-full bg-surface-3" /><i className="size-2.5 rounded-full bg-surface-3" /><i className="size-2.5 rounded-full bg-surface-3" />
         </span>

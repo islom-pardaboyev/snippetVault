@@ -48,7 +48,7 @@ Copy `.env.example` to `.env.local` (git-ignored) and fill in:
 | Variable | Purpose |
 | --- | --- |
 | `VITE_ADMIN_EMAIL` | The only Google/email account that can open `/admin` |
-| `VITE_ADMIN_PASSCODE_SHA256` | SHA-256 hex of the admin passcode. Generate it with `printf '%s' 'your passcode' \| shasum -a 256` |
+| `ADMIN_PASSCODE` | The admin passcode as plain text. It is hashed at build time; only the SHA-256 reaches the site. |
 
 ## Admin
 
