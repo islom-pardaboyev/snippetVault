@@ -11,11 +11,12 @@ const DEMO_CODE = `const vault = await snippets.search("debounce");
 vault.sync({ realtime: true });`;
 
 export function Login() {
-  const { signIn, signUp, reset } = useAuth();
+  const { signIn, signUp, signInWithGoogle, reset } = useAuth();
   const online = useOnline();
   const [mode, setMode] = useState<"in" | "up">("in");
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
+  const [pw2, setPw2] = useState("");
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ text: string; kind?: "err" | "ok" }>({ text: "" });
@@ -23,6 +24,10 @@ export function Login() {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !pw) return setNote({ text: "Enter an email and a password.", kind: "err" });
+    if (mode === "up") {
+      if (pw.length < 8) return setNote({ text: "Use at least 8 characters for your password.", kind: "err" });
+      if (pw !== pw2) return setNote({ text: "The two passwords don't match.", kind: "err" });
+    }
     setBusy(true);
     setNote({ text: mode === "up" ? "Creating your vault…" : "Signing in…" });
     try {
@@ -31,6 +36,12 @@ export function Login() {
       setNote({ text: authMessage(err), kind: "err" });
       setBusy(false);
     }
+  };
+  const google = async () => {
+    setBusy(true);
+    setNote({ text: "Opening Google…" });
+    try { await signInWithGoogle(); }
+    catch (err) { setNote({ text: authMessage(err), kind: "err" }); setBusy(false); }
   };
   const forgot = async () => {
     if (!email.trim()) return setNote({ text: "Type your email above first, then press this again.", kind: "err" });
@@ -67,7 +78,20 @@ export function Login() {
       <section className="grid place-items-center px-6 py-8">
         <form onSubmit={submit} className="w-full max-w-[380px]" noValidate>
           <h2 className="mb-1.5 text-[28px] font-bold tracking-tight">{mode === "up" ? "Create your vault" : "Welcome back"}</h2>
-          <p className="mb-6 text-muted">{mode === "up" ? "Pick any password with 6 or more characters." : "Sign in to sync your snippets."}</p>
+          <p className="mb-6 text-muted">{mode === "up" ? "Use a password with 8 or more characters." : "Sign in to sync your snippets."}</p>
+
+          <button type="button" className="btn btn-lg btn-wide mb-4" onClick={google} disabled={busy || !online}>
+            <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden>
+              <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z" />
+              <path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z" />
+              <path fill="#FBBC05" d="M10.5 28.7a14.5 14.5 0 0 1 0-9.4l-7.9-6.1a24 24 0 0 0 0 21.6l7.9-6.1z" />
+              <path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.5-5.8c-2.1 1.4-4.8 2.3-8.4 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z" />
+            </svg>
+            Continue with Google
+          </button>
+          <div className="mb-4 flex items-center gap-3 text-[12px] uppercase tracking-[.1em] text-faint">
+            <span className="h-px flex-1 bg-line" />or<span className="h-px flex-1 bg-line" />
+          </div>
 
           <label className="mb-3.5 block"><span className="mb-1.5 block text-[12.5px] font-semibold text-muted">Email</span>
             <input className={input} type="email" autoComplete="email" inputMode="email" placeholder="you@example.com"
@@ -75,12 +99,17 @@ export function Login() {
           <label className="mb-4 block"><span className="mb-1.5 block text-[12.5px] font-semibold text-muted">Password</span>
             <span className="relative block">
               <input className={`${input} pr-11`} type={show ? "text" : "password"} autoComplete={mode === "up" ? "new-password" : "current-password"}
-                placeholder="At least 6 characters" value={pw} onChange={(e) => setPw(e.target.value)} />
+                placeholder={mode === "up" ? "At least 8 characters" : "Your password"} value={pw} onChange={(e) => setPw(e.target.value)} />
               <button type="button" aria-label={show ? "Hide password" : "Show password"} onClick={() => setShow((s) => !s)}
                 className="absolute right-1 top-1 grid size-10 place-items-center rounded-lg text-muted hover:text-ink">
                 <Icon name={show ? "eyeoff" : "eye"} size={17} />
               </button>
             </span></label>
+          {mode === "up" && (
+            <label className="mb-4 block"><span className="mb-1.5 block text-[12.5px] font-semibold text-muted">Confirm password</span>
+              <input className={input} type={show ? "text" : "password"} autoComplete="new-password" placeholder="Repeat your password"
+                value={pw2} onChange={(e) => setPw2(e.target.value)} /></label>
+          )}
 
           <button className="btn btn-primary btn-lg btn-wide" disabled={busy || !online}>
             {busy ? "Please wait…" : mode === "up" ? "Create account" : "Sign in"}
@@ -89,7 +118,7 @@ export function Login() {
           <p role="status" className={`mt-3.5 min-h-[22px] text-[13px] ${note.kind === "err" ? "text-danger" : note.kind === "ok" ? "text-accent" : "text-muted"}`}>{note.text}</p>
 
           <div className="flex items-center justify-between text-[13px]">
-            <button type="button" className="link-btn" onClick={() => { setMode(mode === "in" ? "up" : "in"); setNote({ text: "" }); }}>
+            <button type="button" className="link-btn" onClick={() => { setMode(mode === "in" ? "up" : "in"); setNote({ text: "" }); setPw2(""); }}>
               {mode === "in" ? "Create an account" : "I already have an account"}
             </button>
             {mode === "in" && <button type="button" className="link-btn" onClick={forgot}>Forgot password?</button>}

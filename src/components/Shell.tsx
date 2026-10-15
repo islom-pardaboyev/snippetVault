@@ -5,22 +5,26 @@ import { Logo } from "./Logo";
 import { CommandPalette } from "./CommandPalette";
 import { SettingsDialog } from "./SettingsDialog";
 import { InstallPrompt } from "./InstallPrompt";
-import { useModal } from "./Modal";
+import { useNewGroup } from "./NewGroupDialog";
 import { LangIcon } from "./LangIcon";
 import { useSnippets } from "../hooks/snippets";
-import { useOnline, useToast } from "../hooks/ui";
+import { useAuth } from "../hooks/auth";
+import { useOnline, useTheme, useToast } from "../hooks/ui";
 import { LANGUAGES } from "../lib/utils";
 
 const SYNC_LABEL = { synced: "Synced", syncing: "Syncing…", offline: "Offline" } as const;
 
 export function Shell() {
   const nav = useNavigate();
-  const { prompt } = useModal();
+  const [newGroup, newGroupDialog] = useNewGroup();
+  const { verified, resendVerification, email: accountEmail } = useAuth();
+  const [verifyHidden, setVerifyHidden] = useState(false);
   const loc = useLocation();
   const online = useOnline();
-  const { snippets, sync, groups: allGroupNames, groupMeta, addGroup, save } = useSnippets();
+  const { snippets, sync, groups: allGroupNames, groupMeta, save } = useSnippets();
   const [dropOn, setDropOn] = useState<string | null>(null);
   const toast = useToast();
+  const { isLight, toggle: toggleTheme } = useTheme();
   const [params, setParams] = useSearchParams();
   const [palette, setPalette] = useState(false);
   const [settings, setSettings] = useState(false);
@@ -41,6 +45,7 @@ export function Shell() {
       if (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable || e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === "/") { e.preventDefault(); searchRef.current?.focus(); }
       else if (e.key.toLowerCase() === "n") { e.preventDefault(); nav("/new"); }
+      else if (e.key.toLowerCase() === "d") { e.preventDefault(); toggleTheme(); toast(isLight ? "Dark mode" : "Light mode"); }
     };
     const onPaste = (e: ClipboardEvent) => {
       const t = e.target as HTMLElement;
@@ -55,7 +60,7 @@ export function Shell() {
     window.addEventListener("keydown", onKey);
     window.addEventListener("paste", onPaste);
     return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("paste", onPaste); };
-  }, [nav, toast]);
+  }, [nav, toast, toggleTheme, isLight]);
 
   const { langs, tags, groups } = useMemo(() => {
     const lc: Record<string, number> = {}, tc: Record<string, number> = {}, gc: Record<string, number> = {};
@@ -72,6 +77,14 @@ export function Shell() {
 
   return (
     <div className="flex min-h-screen flex-col">
+      {newGroupDialog}
+      {!verified && !verifyHidden && (
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-line bg-surface-2 px-4 py-2 text-center text-[13px]">
+          <span>Confirm your email — we sent a link to <b>{accountEmail}</b>.</span>
+          <button className="link-btn" onClick={() => resendVerification().then(() => toast("Verification email sent"), () => toast("Couldn't send — try again in a minute", { kind: "err" }))}>Resend</button>
+          <button className="link-btn" onClick={() => setVerifyHidden(true)}>Dismiss</button>
+        </div>
+      )}
       {!online && (
         <div className="flex items-center justify-center gap-2.5 border-b border-accent/40 bg-accent/15 px-4 py-2 text-center text-[13px] font-semibold">
           <Icon name="wifioff" size={16} /> You're offline — your vault still works and changes sync when you're back.
@@ -123,10 +136,7 @@ export function Shell() {
           </SideGroup>
           <SideGroup title="Groups" action={
             <button aria-label="New group" title="New group" className="grid size-6 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-ink"
-              onClick={async () => {
-                const g = await prompt({ title: "New group", description: "A topic folder — put Python, JavaScript, HTML, CSS and terminal snippets together.", label: "Group name", placeholder: "e.g. Sorting algorithms", confirmLabel: "Create group" });
-                if (g) { addGroup(g); nav(`/group/${encodeURIComponent(g)}`); }
-              }}>
+              onClick={newGroup}>
               <Icon name="plus" size={15} />
             </button>}>
             {groups.length === 0 && <p className="px-2.5 py-1 text-[12.5px] text-faint">No groups yet — press + to create one.</p>}

@@ -1,7 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
-  signOut, sendPasswordResetEmail, type User,
+  signOut, sendPasswordResetEmail, sendEmailVerification, updatePassword,
+  reauthenticateWithCredential, EmailAuthProvider, GoogleAuthProvider, signInWithPopup, type User,
 } from "firebase/auth";
 import { auth } from "../lib/firebase";
 
@@ -11,7 +12,14 @@ interface AuthCtx {
   email: string | null;
   signIn(email: string, pw: string): Promise<void>;
   signUp(email: string, pw: string): Promise<void>;
+  signInWithGoogle(): Promise<void>;
   reset(email: string): Promise<void>;
+  resendVerification(): Promise<void>;
+  changePassword(current: string, next: string): Promise<void>;
+  /** true when the account signs in with email + password (so it has a password to change) */
+  hasPassword: boolean;
+  /** false for an email/password account that hasn't confirmed its address yet */
+  verified: boolean;
   logout(): Promise<void>;
 }
 const Ctx = createContext<AuthCtx | null>(null);
@@ -22,14 +30,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => onAuthStateChanged(auth, (u) => { setUser(u); setReady(true); }), []);
 
   const signIn = useCallback(async (e: string, p: string) => { await signInWithEmailAndPassword(auth, e, p); }, []);
-  const signUp = useCallback(async (e: string, p: string) => { await createUserWithEmailAndPassword(auth, e, p); }, []);
+  const signUp = useCallback(async (e: string, p: string) => {
+    const cred = await createUserWithEmailAndPassword(auth, e, p);
+    // best effort — the account exists either way, the banner lets the user resend
+    sendEmailVerification(cred.user).catch(() => undefined);
+  }, []);
+  const signInWithGoogle = useCallback(async () => {
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: "select_account" });
+    await signInWithPopup(auth, provider);
+  }, []);
+  const resendVerification = useCallback(async () => {
+    if (auth.currentUser) await sendEmailVerification(auth.currentUser);
+  }, []);
+  const changePassword = useCallback(async (current: string, next: string) => {
+    const u = auth.currentUser;
+    if (!u?.email) throw new Error("No password on this account");
+    await reauthenticateWithCredential(u, EmailAuthProvider.credential(u.email, current));
+    await updatePassword(u, next);
+  }, []);
   const reset = useCallback(async (e: string) => { await sendPasswordResetEmail(auth, e); }, []);
   const logout = useCallback(async () => { if (auth.currentUser) await signOut(auth); }, []);
 
   const value = useMemo<AuthCtx>(() => ({
     status: user ? "in" : ready ? "out" : "loading",
-    user, email: user?.email ?? null, signIn, signUp, reset, logout,
-  }), [user, ready, signIn, signUp, reset, logout]);
+    user, email: user?.email ?? null, signIn, signUp, signInWithGoogle, reset, resendVerification, changePassword,
+    hasPassword: !!user?.providerData.some((p) => p.providerId === "password"),
+    verified: !user || user.emailVerified || !user.providerData.some((p) => p.providerId === "password"),
+    logout,
+  }), [user, ready, signIn, signUp, signInWithGoogle, reset, resendVerification, changePassword, logout]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
@@ -50,7 +79,13 @@ const MESSAGES: Record<string, string> = {
   "auth/wrong-password": "Wrong email or password.",
   "auth/too-many-requests": "Too many attempts. Wait a minute and try again.",
   "auth/network-request-failed": "No connection. Check your internet and try again.",
-  "auth/operation-not-allowed": "Enable Email/Password sign-in in the Firebase console.",
+  "auth/operation-not-allowed": "This sign-in method isn't enabled in the Firebase console yet.",
+  "auth/popup-closed-by-user": "Sign-in window was closed before finishing.",
+  "auth/cancelled-popup-request": "Sign-in window was closed before finishing.",
+  "auth/popup-blocked": "Your browser blocked the Google sign-in window — allow popups and try again.",
+  "auth/account-exists-with-different-credential": "That email already has an account with a different sign-in method.",
+  "auth/unauthorized-domain": "This domain isn't authorised for sign-in — add it in Firebase → Authentication → Settings.",
+  "auth/requires-recent-login": "Please sign out and back in, then try again.",
 };
 export function authMessage(err: unknown): string {
   const code = (err as { code?: string })?.code ?? "";

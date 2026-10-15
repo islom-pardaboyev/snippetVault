@@ -1,7 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "./Icon";
 import { useTheme, useInstall, useToast } from "../hooks/ui";
-import { useAuth } from "../hooks/auth";
+import { useAuth, authMessage } from "../hooks/auth";
 import { useSnippets } from "../hooks/snippets";
 import { exportJson, parseImport, seedSnippets } from "../lib/utils";
 import type { Accent, ThemeMode } from "../lib/types";
@@ -17,15 +17,28 @@ const THEMES: { id: ThemeMode; label: string }[] = [
   { id: "system", label: "System" }, { id: "dark", label: "Dark" }, { id: "light", label: "Light" },
 ];
 const SHORTCUTS: [string, string][] = [
-  ["Command palette", "⌘ K"], ["Focus search", "/"], ["New snippet", "N"], ["Copy code (detail)", "C"],
-  ["Edit (detail)", "E"], ["Favourite (detail)", "F"], ["Save (editor)", "⌘ ↵"], ["Go back", "Esc"],
+  ["Command palette", "⌘ K"], ["Focus search", "/"], ["New snippet", "N"], ["Toggle dark / light", "D"], ["Copy code (detail)", "C"],
+  ["Edit (detail)", "E"], ["Favourite (detail)", "F"], ["Run code (detail)", "R"], ["Run code (editor)", "⌘ ⇧ ↵"], ["Save (editor)", "⌘ ↵"], ["Go back", "Esc"],
 ];
 
 export function SettingsDialog({ open, onClose }: { open: boolean; onClose(): void }) {
   const ref = useRef<HTMLDialogElement>(null);
   const file = useRef<HTMLInputElement>(null);
   const { theme, accent, customColor, setTheme, setAccent, setCustomColor } = useTheme();
-  const { email, logout } = useAuth();
+  const { email, user, logout, hasPassword, changePassword } = useAuth();
+  const [pwOpen, setPwOpen] = useState(false);
+  const [curPw, setCurPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [pwNote, setPwNote] = useState<{ text: string; ok?: boolean }>({ text: "" });
+  const viaGoogle = !!user?.providerData.some((p) => p.providerId === "google.com");
+  const submitPw = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPw.length < 8) return setPwNote({ text: "New password needs at least 8 characters." });
+    try {
+      await changePassword(curPw, newPw);
+      setPwNote({ text: "Password updated.", ok: true }); setCurPw(""); setNewPw(""); setPwOpen(false);
+    } catch (err) { setPwNote({ text: authMessage(err) }); }
+  };
   const { snippets, saveMany } = useSnippets();
   const { canInstall, installed, install } = useInstall();
   const toast = useToast();
@@ -116,9 +129,27 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose(): vo
         </Section>
 
         <Section title="Account">
-          <Row label={email ?? "Signed in"} hint="Synced with Firebase">
+          <Row label={user?.displayName || email || "Signed in"}
+            hint={`${user?.displayName ? `${email} · ` : ""}${viaGoogle ? "Signed in with Google" : "Email & password"} · synced with Firebase`}>
             <button className="btn btn-danger" onClick={() => { onClose(); logout(); }}><Icon name="logout" size={16} /> Sign out</button>
           </Row>
+          {hasPassword && (
+            <div className="border-t border-line pt-2">
+              <Row label="Password" hint={pwNote.text && !pwOpen ? pwNote.text : "Change the password you sign in with"}>
+                <button className="btn" onClick={() => { setPwOpen((o) => !o); setPwNote({ text: "" }); }}>{pwOpen ? "Cancel" : "Change"}</button>
+              </Row>
+              {pwOpen && (
+                <form onSubmit={submitPw} className="grid gap-2 pb-2">
+                  <input type="password" autoComplete="current-password" placeholder="Current password" value={curPw} onChange={(e) => setCurPw(e.target.value)}
+                    className="w-full rounded-[10px] border border-line bg-surface-2 px-3 py-2.5 outline-none focus:border-accent" />
+                  <input type="password" autoComplete="new-password" placeholder="New password (8+ characters)" value={newPw} onChange={(e) => setNewPw(e.target.value)}
+                    className="w-full rounded-[10px] border border-line bg-surface-2 px-3 py-2.5 outline-none focus:border-accent" />
+                  {pwNote.text && <p className={`text-[13px] ${pwNote.ok ? "text-accent" : "text-danger"}`}>{pwNote.text}</p>}
+                  <button className="btn btn-primary" disabled={!curPw || !newPw}>Update password</button>
+                </form>
+              )}
+            </div>
+          )}
         </Section>
       </div>
     </dialog>
