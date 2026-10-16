@@ -4,3 +4,11 @@ dist
 *.local
 .DS_Store
 .env
+# Android signing keys — never commit; whoever holds the keystore controls the app
+*.keystore
+*.jks
+# Android build output (Bubblewrap TWA project)
+build/
+.gradle/
+app-release-*
+manifest-checksum.txt

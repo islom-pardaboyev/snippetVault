@@ -31,6 +31,11 @@ On **Vercel**: import the repo (it picks up `vercel.json` for SPA fallback + sec
 set `VITE_FIREBASE_*`, `VITE_ADMIN_EMAIL`, `ADMIN_PASSCODE`, optional `IMB_API` in Project
 Settings. Rules still deploy through `firebase-tools` — see `docs/security.md` §8.
 
+**Android app**: the site packages into a Google Play app (Trusted Web Activity) with no code
+changes — see `docs/android-twa.md`. The web manifest is generated from `vite.config.ts` and served
+at `/manifest.webmanifest`; the placeholder `public/.well-known/assetlinks.json` is what verifies
+the Android app to the domain (needed for publishing).
+
 ## What's inside
 
 | Path | Purpose |
