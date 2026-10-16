@@ -24,9 +24,12 @@ const INPUT = "w-full rounded-[10px] border border-line bg-surface-2 px-3 py-3 o
 /** How many vault images are decrypted (and downloaded) per click of "Load more". */
 const IMAGE_PAGE = 4;
 
+/** How many gallery images are decrypted per page — each is its own encrypted download. */
+const GALLERY_PAGE = 12;
+
 /** `/vault` — set up, unlock and browse the encrypted vault. */
 export function Vault() {
-  const { available, status, entries, items, lock } = useVault();
+  const { available, status, entries, items, gallery, lock } = useVault();
   const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
 
   if (!available) {
@@ -51,29 +54,154 @@ export function Vault() {
             Vault
           </h1>
           <p className="mt-1 text-sm text-muted">
-            {entries.length} locked item{entries.length === 1 ? "" : "s"} · decrypted only in this tab, never stored in the clear
+            {entries.length} locked item{entries.length === 1 ? "" : "s"}
+            {gallery.length > 0 && <> · {gallery.length} image{gallery.length === 1 ? "" : "s"}</>} ·
+            {" "}decrypted only in this tab, never stored in the clear
           </p>
         </div>
         <button className="btn" onClick={lock}><Icon name="lock" size={16} /> Lock now</button>
       </div>
 
       {entries.length === 0 ? (
-        <div className="rounded-3xl border border-dashed border-line-strong bg-surface px-5 py-[64px] text-center">
-          <div className="mx-auto mb-[18px] grid size-[54px] place-items-center rounded-2xl bg-accent/15 text-accent"><Icon name="shield" size={26} /></div>
-          <h2 className="mb-1.5 text-[22px] font-bold tracking-tight">Your vault is empty</h2>
-          <p className="mx-auto mb-[22px] max-w-[44ch] text-muted">
-            Open any snippet and choose <b className="text-ink">Move to Vault</b> to lock it away. Locked items are
-            encrypted on this device before they reach the server.
-          </p>
-          <Link to="/" className="btn btn-primary btn-lg"><Icon name="library" /> Go to library</Link>
-        </div>
+        gallery.length === 0 ? (
+          <div className="rounded-3xl border border-dashed border-line-strong bg-surface px-5 py-[64px] text-center">
+            <div className="mx-auto mb-[18px] grid size-[54px] place-items-center rounded-2xl bg-accent/15 text-accent"><Icon name="shield" size={26} /></div>
+            <h2 className="mb-1.5 text-[22px] font-bold tracking-tight">Your vault is empty</h2>
+            <p className="mx-auto mb-[22px] max-w-[44ch] text-muted">
+              Open any snippet and choose <b className="text-ink">Move to Vault</b> to lock it away. Locked items are
+              encrypted on this device before they reach the server.
+            </p>
+            <Link to="/" className="btn btn-primary btn-lg"><Icon name="library" /> Go to library</Link>
+          </div>
+        ) : (
+          /* The gallery below has content, so don't claim the vault is entirely empty —
+             this card only stands in for the (still missing) locked snippets. */
+          <div className="mb-5 rounded-2xl border border-dashed border-line-strong bg-surface px-5 py-7 text-center">
+            <p className="text-muted">
+              <b className="text-ink">No locked snippets yet.</b> Open any snippet and choose{" "}
+              <b className="text-ink">Move to Vault</b> to lock it away — your encrypted images live below.
+            </p>
+          </div>
+        )
       ) : (
         <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))]">
           {entries.map((e, i) => <VaultCard key={e.id} entry={e} index={i} />)}
         </div>
       )}
+      <GallerySection />
       <SettingsFoot items={items.length} />
     </div>
+  );
+}
+
+/**
+ * The vault's standalone image gallery — pictures that belong to no snippet. Every upload is
+ * sealed on this device, then hosted on imgbb as ciphertext; every delete removes both the
+ * Firestore record and the hosted blob (best effort, see `deleteHostedImage`).
+ */
+function GallerySection() {
+  const { status, gallery, addGalleryImages, removeGalleryImage, loadGalleryImages } = useVault();
+  const toast = useToast();
+  const { confirm } = useModal();
+  const [images, setImages] = useState<SnippetImage[]>([]);
+  const [page, setPage] = useState(1);
+  const [exhausted, setExhausted] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [decrypting, setDecrypting] = useState(false);
+  const total = gallery.length;
+  // Re-key on membership (the id list), not the array identity: every snapshot rebuilds
+  // `gallery`, and re-decrypting twelve downloads on unrelated churn would be absurd.
+  const ids = gallery.map((g) => g.id).join(",");
+
+  useEffect(() => {
+    if (status !== "unlocked") { setImages([]); return; }
+    let alive = true;
+    setPage(1);
+    setExhausted(false);
+    setDecrypting(true);
+    loadGalleryImages(0, GALLERY_PAGE)
+      .then((list) => { if (alive) setImages(list); })
+      .catch(() => { if (alive) setImages([]); })
+      .finally(() => { if (alive) setDecrypting(false); });
+    return () => { alive = false; };
+  }, [ids, status, loadGalleryImages]);
+
+  const onAdd = async (files: File[]) => {
+    setBusy(true);
+    try {
+      const { added, error } = await addGalleryImages(files);
+      if (added) toast(`Added ${added} image${added === 1 ? "" : "s"}`);
+      if (error) toast(error, { kind: "err" });
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Couldn't add the images", { kind: "err" });
+    } finally { setBusy(false); }
+  };
+
+  const onRemove = async (id: string) => {
+    if (!images.some((x) => x.id === id)) return;
+    const ok = await confirm({
+      title: "Delete this image?",
+      description: "The encrypted record and the ciphertext hosted on imgbb are both removed. This can't be undone.",
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      await removeGalleryImage(id);
+      setImages((prev) => prev.filter((x) => x.id !== id));
+    } catch {
+      toast("Couldn't delete that image", { kind: "err" });
+    } finally { setBusy(false); }
+  };
+
+  const loadMore = async () => {
+    setDecrypting(true);
+    try {
+      const next = await loadGalleryImages(page * GALLERY_PAGE, GALLERY_PAGE);
+      setImages((prev) => [...prev, ...next]);
+      // A short or empty page means there is nothing left (or nothing reachable) beyond here.
+      if (next.length) setPage((p) => p + 1);
+      else setExhausted(true);
+    } catch { /* unreachable tiles simply aren't shown */ }
+    finally { setDecrypting(false); }
+  };
+
+  return (
+    <section className="mt-10 rounded-card border border-line bg-surface p-5">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="flex items-center gap-2 text-[13px] font-bold uppercase tracking-[.1em] text-faint">
+            <Icon name="image" size={15} className="text-accent" />
+            Images{" "}{total > 0 && <span className="text-muted">· {total}</span>}
+          </h2>
+          <p className="mt-1.5 max-w-[74ch] text-[13px] text-muted">
+            A private gallery of its own — not attached to any snippet. Each picture is encrypted on this
+            device before it's stored, and deleting it here removes both the record and the copy on imgbb.
+          </p>
+        </div>
+        {total > 0 && images.length < total && (
+          <span className="font-mono text-[12px] tabular-nums text-faint">{images.length}/{total} decrypted</span>
+        )}
+      </div>
+
+      <ImageGallery
+        images={images}
+        max={Infinity}
+        busy={busy || decrypting}
+        onAdd={onAdd}
+        onRemove={onRemove}
+        hint={hasImgbb()
+          ? `${total} image${total === 1 ? "" : "s"} · encrypted here first, then hosted on imgbb as ciphertext.`
+          : "Stored inline in Firestore. Add `IMB_API` to .env to host gallery images on imgbb instead."}
+      />
+      {images.length < total && !exhausted && (
+        <button className="btn mt-3" onClick={loadMore} disabled={decrypting}>
+          <Icon name="download" size={16} />
+          {decrypting ? "Decrypting…" : `Load more (${total - images.length} left)`}
+        </button>
+      )}
+    </section>
   );
 }
 

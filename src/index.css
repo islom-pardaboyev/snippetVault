@@ -59,16 +59,45 @@
 }
 
 @layer base {
-  html { -webkit-text-size-adjust: 100%; }
+  html { -webkit-text-size-adjust: 100%; scrollbar-gutter: stable; }
   body {
     background: var(--bg); color: var(--text);
     font-family: var(--font-sans); font-size: 15px; line-height: 1.5;
     -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+    /* Branded tap feedback instead of the OS's grey flash on Android. */
+    -webkit-tap-highlight-color: color-mix(in srgb, var(--accent) 22%, transparent);
   }
+  /* Thin, themed scrollbars wherever the platform lets us style them (Firefox, Chromium 121+).
+     Safari/macOS keep their native overlay bars, which need no theming. Higher-specificity
+     utilities such as `[scrollbar-width:none]` still win over this. */
+  * { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
   button { cursor: pointer; font: inherit; color: inherit; }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
   ::selection { background: var(--accent); color: var(--accent-ink); }
   dialog::backdrop { background: rgba(5, 6, 8, .62); backdrop-filter: blur(5px); }
+  /* Chrome autofills in its own pale yellow; repaint it with the app's own input surface. */
+  input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus,
+  textarea:-webkit-autofill, select:-webkit-autofill {
+    -webkit-box-shadow: 0 0 0 1000px var(--surface-2) inset;
+    -webkit-text-fill-color: var(--text);
+    caret-color: var(--text);
+    transition: background-color 99999s ease-out 0s;
+  }
+}
+
+/* ---- ambient light ----
+   A barely-there accent glow behind everything. Cards, borders and surfaces already carry
+   the depth; this keeps the flat background from reading as dead — and since it reads
+   `--accent`, it follows every accent change (including custom colours) automatically. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(1000px 480px at 50% -10%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 65%),
+    radial-gradient(760px 420px at 92% -4%, color-mix(in srgb, var(--accent) 3%, transparent), transparent 60%);
 }
 
 /* ---- syntax tokens ---- */
@@ -109,6 +138,14 @@
 }
 dialog[open] { animation: pop .28s var(--ease-out-expo); }
 
+/* Theme/accent switches cross-fade instead of snapping. ThemeProvider holds this class on
+   <html> for a few hundred ms after the change; it dies under prefers-reduced-motion like
+   every other transition here. Unlayered, so it also covers Tailwind's own `transition`. */
+.theme-anim *, .theme-anim *::before, .theme-anim *::after {
+  transition: background-color .32s ease, border-color .32s ease, color .32s ease,
+    fill .32s ease, stroke .32s ease, box-shadow .32s ease, outline-color .32s ease;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
 }
@@ -128,6 +165,9 @@ dialog[open] { animation: pop .28s var(--ease-out-expo); }
   .chip-on { @apply border-accent bg-accent text-accent-ink hover:text-accent-ink; }
   .link-btn { @apply border-0 bg-transparent p-0 text-[13px] text-muted underline underline-offset-[3px] hover:text-ink; }
 }
+/* A hairline of light along the top edge plus a tight shadow: primary actions read as solid
+   physical objects rather than flat colour. */
+.btn-primary { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), 0 1px 2px rgba(0, 0, 0, .28); }
 
 /* ---- rich notes (Tiptap) ----
    The editor and the read-only view share `.note-prose`, and the syntax colours come from the

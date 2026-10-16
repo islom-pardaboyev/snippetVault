@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { deleteVaultImage, deleteVaultItem } from "../vault";
+import { deleteGalleryImage, deleteVaultImage, deleteVaultItem } from "../vault";
 import { wipeUserData } from "../account";
 
 /**
- * The image-hosting lifecycle: whenever a vault image record leaves Firestore — single
- * image deleted, whole item deleted (which is also every "move out of the vault"), or the
- * account wiped — the ciphertext hosted on imgbb must be asked to go too. Firestore goes
- * first; the host is best-effort behind it.
+ * The image-hosting lifecycle: whenever a vault image record leaves Firestore — single image
+ * deleted, whole item deleted (which is also every "move out of the vault"), a standalone
+ * gallery image deleted, or the account wiped — the ciphertext hosted on imgbb must be asked
+ * to go too. Firestore goes first; the host is best-effort behind it.
  *
  * Firestore is a tiny in-memory stand-in (direct-children collections only, which is all
  * this code touches), so these tests are about *what gets deleted where*, never the network.
@@ -75,6 +75,7 @@ vi.mock("firebase/firestore", () => {
 const UID = "user-1";
 const ITEM = "snip-1";
 const HOSTED = "https://ibb.co/2ndCYJK/670a7e48ddcb85ac340c717a41047e5c";
+const GALLERY_HOSTED = "https://ibb.co/9zKLmn/0a1b2c3d4e5f60718293a4b5c6d7e8f9";
 
 /** One vault item with two images: one hosted on imgbb, one sealed inline (nothing to purge). */
 function seedVault() {
@@ -122,18 +123,54 @@ describe("vault image cleanup", () => {
   });
 });
 
+describe("vault gallery cleanup", () => {
+  /** Two standalone gallery images: one hosted on imgbb, one sealed inline. */
+  function seedGallery() {
+    store.docs.set(`users/${UID}/vaultImages/g-1`, {
+      fmt: 2, remote: { url: "https://i.ibb.co/y/2.png", iv: "a", sha: "s", bytes: 10, delete_url: GALLERY_HOSTED },
+      created_at: "t2",
+    });
+    store.docs.set(`users/${UID}/vaultImages/g-2`, { fmt: 2, enc: { iv: "c", ct: "d" }, created_at: "t1" });
+  }
+
+  it("deleting a gallery image purges its hosted blob and leaves the rest alone", async () => {
+    seedGallery();
+
+    await deleteGalleryImage(UID, "g-1");
+    expect(store.docs.has(`users/${UID}/vaultImages/g-1`)).toBe(false);
+    expect(host.deleted).toEqual([GALLERY_HOSTED]);
+
+    await deleteGalleryImage(UID, "g-2"); // sealed inline: nothing hosted to purge
+    expect(host.deleted).toHaveLength(1);
+    expect(store.docs.has(`users/${UID}/vaultImages/g-2`)).toBe(false);
+  });
+
+  it("deleting a gallery image succeeds even when the host refuses", async () => {
+    seedGallery();
+    host.fail = true;
+
+    await expect(deleteGalleryImage(UID, "g-1")).resolves.toBeUndefined();
+    expect(store.docs.has(`users/${UID}/vaultImages/g-1`)).toBe(false);
+  });
+});
+
 describe("wipeUserData", () => {
-  it("wipes snippets, groups, the vault and its meta — and purges hosted blobs", async () => {
+  it("wipes snippets, groups, the vault, its gallery and its meta — and purges hosted blobs", async () => {
     store.docs.set(`users/${UID}/snippets/s1`, { title: "a" });
     store.docs.set(`users/${UID}/snippets/s1/images/i1`, { data: "data:image/png;base64,x" });
     store.docs.set(`users/${UID}/snippets/s1/versions/v1`, { code: "x" });
     store.docs.set(`users/${UID}/groups/g1`, { name: "g" });
     store.docs.set(`users/${UID}/meta/vault`, { wrapped_dek: "w", kdf: {} });
+    store.docs.set(`users/${UID}/vaultImages/g-1`, {
+      fmt: 2, remote: { url: "https://i.ibb.co/y/2.png", iv: "a", sha: "s", bytes: 10, delete_url: GALLERY_HOSTED },
+      created_at: "t",
+    });
     seedVault();
 
     await wipeUserData(UID);
 
     expect([...store.docs.keys()]).toEqual([]);
-    expect(host.deleted).toEqual([HOSTED]);
+    // Vault-item blobs are collected before the gallery's, and allSettled preserves input order.
+    expect(host.deleted).toEqual([HOSTED, GALLERY_HOSTED]);
   });
 });

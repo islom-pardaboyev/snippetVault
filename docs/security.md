@@ -118,7 +118,9 @@ image, a vault item, or the whole account) reverses it: the blob at imgbb is ask
 its stored `delete_url` — a reverse-engineered, undocumented, **unverifiable** request (`no-cors`
 POST to `ibb.co/json`, see `deleteHostedImage`). It is best-effort by design: Firestore is deleted
 first, and a failure only strands opaque ciphertext (plus quota) on a third party, never readable
-content — the URL stays in the image record so the owner can reclaim it by hand.
+content — the URL stays in the image record so the owner can reclaim it by hand. The vault's
+**standalone gallery** (`users/{uid}/vaultImages`, images attached to no snippet) runs the identical
+pipeline: seal → verified imgbb pointer (inline fallback), purge on delete, wipe with the account.
 
 ## 7. Code runner sandbox
 

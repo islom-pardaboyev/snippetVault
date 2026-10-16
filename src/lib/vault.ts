@@ -15,6 +15,7 @@ import type { Snippet, SnippetImage } from "./types";
  *   users/{uid}/meta/vault                    → {@link VaultMeta}: KDF params + the sealed data key
  *   users/{uid}/vault/{itemId}                → {@link VaultItem}: the sealed payload
  *   users/{uid}/vault/{itemId}/images/{imgId} → {@link VaultImage}: a sealed image
+ *   users/{uid}/vaultImages/{imgId}           → {@link VaultGalleryImage}: a sealed gallery image
  *
  * Nothing here is readable without the passphrase: titles, code, notes, tags, group, images
  * and versions all live inside AES-GCM ciphertext. See docs/vault-and-app-lock-plan.md.
@@ -82,6 +83,15 @@ export interface VaultImageRemote {
   bytes: number;
   /** Owner-only link to delete the file from imgbb (imgbb has no delete API). */
   delete_url: string | null;
+}
+
+/**
+ * A standalone image in the vault's private gallery — sealed exactly like {@link VaultImage}
+ * (inline `enc` or a verified imgbb `remote` pointer), but belonging to no snippet.
+ * `created_at` is the one plaintext field; it only exists so the grid can be sorted.
+ */
+export interface VaultGalleryImage extends VaultImage {
+  created_at: string;
 }
 
 /** A decrypted item, shaped like the fields the UI needs. */
@@ -287,6 +297,8 @@ const itemsCol = (uid: string) => collection(db, "users", uid, "vault");
 const itemDoc = (uid: string, id: string) => doc(db, "users", uid, "vault", id);
 const imagesCol = (uid: string, id: string) => collection(db, "users", uid, "vault", id, "images");
 const imageDoc = (uid: string, id: string, imageId: string) => doc(db, "users", uid, "vault", id, "images", imageId);
+const galleryCol = (uid: string) => collection(db, "users", uid, "vaultImages");
+const galleryDoc = (uid: string, imageId: string) => doc(db, "users", uid, "vaultImages", imageId);
 
 export async function getVaultMeta(uid: string): Promise<VaultMeta | null> {
   const snap = await getDoc(metaDoc(uid));
@@ -352,6 +364,37 @@ export async function deleteVaultImage(uid: string, id: string, imageId: string)
   const snap = await getDoc(ref);
   await deleteDoc(ref);
   if (snap.exists()) await purgeHosted([snap.data() as Omit<VaultImage, "id">]);
+}
+
+/* ------------------------------------------------- standalone gallery */
+
+/**
+ * The vault gallery: sealed images that belong to no snippet (the `/vault` Images section).
+ * Same seal → host → verify → purge pipeline as item images; `created_at` merely sorts it.
+ * Newest first — a gallery reads better that way than the item list's chronological order.
+ */
+export function watchGalleryImages(
+  uid: string, cb: (images: VaultGalleryImage[]) => void, onError?: () => void,
+): () => void {
+  return onSnapshot(
+    query(galleryCol(uid), orderBy("created_at", "desc")),
+    (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<VaultGalleryImage, "id">) }))),
+    () => onError?.(),
+  );
+}
+
+export async function putGalleryImage(uid: string, image: VaultGalleryImage): Promise<void> {
+  const { id, ...data } = image;
+  await setDoc(galleryDoc(uid, id), data);
+}
+
+export async function deleteGalleryImage(uid: string, imageId: string): Promise<void> {
+  const ref = galleryDoc(uid, imageId);
+  const snap = await getDoc(ref);
+  // Record first, then the blob behind it — same order (and same best-effort contract) as
+  // deleting an item image: an imgbb hiccup strands ciphertext, never a readable picture.
+  await deleteDoc(ref);
+  if (snap.exists()) await purgeHosted([snap.data() as Omit<VaultGalleryImage, "id">]);
 }
 
 /* --------------------------------------------- plaintext side of a move */

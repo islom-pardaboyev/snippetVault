@@ -14,6 +14,34 @@ service cloud.firestore {
         && request.auth.token.email == 'ipardaboyev574@gmail.com';
     }
 
+    // A sealed image record: inline ciphertext (`enc`) **or** a pointer to ciphertext hosted
+    // on imgbb (`remote`) — never both, so a hosted image is ~300 bytes instead of ~700 KB.
+    // Only the shape/size is checkable; the bytes are unreadable either way. Shared by the
+    // item images and the standalone vault gallery below.
+    function isSealedImage() {
+      return (
+        (
+          'enc' in request.resource.data
+          && request.resource.data.enc.iv is string && request.resource.data.enc.iv.size() <= 64
+          && request.resource.data.enc.ct is string && request.resource.data.enc.ct.size() <= 950000
+        ) || (
+          'remote' in request.resource.data
+          && request.resource.data.remote.url is string
+          && request.resource.data.remote.url.matches('^https://.*')
+          && request.resource.data.remote.url.size() <= 600
+          && request.resource.data.remote.iv is string && request.resource.data.remote.iv.size() <= 64
+          && request.resource.data.remote.sha is string && request.resource.data.remote.sha.size() <= 64
+          && request.resource.data.remote.bytes is int
+          && request.resource.data.remote.bytes > 0
+          && request.resource.data.remote.bytes <= 4000000
+          && (!('delete_url' in request.resource.data.remote)
+              || request.resource.data.remote.delete_url == null
+              || (request.resource.data.remote.delete_url is string
+                  && request.resource.data.remote.delete_url.size() <= 600))
+        )
+      );
+    }
+
     // Public directory: each account owns its own row; the admin can read every row.
     match /users/{uid} {
       allow read: if isOwner(uid) || isAdmin();
@@ -59,6 +87,7 @@ service cloud.firestore {
     //   users/{uid}/meta/vault                             → KDF params + wrapped data key
     //   users/{uid}/vault/{itemId}                         → an encrypted snippet
     //   users/{uid}/vault/{itemId}/images/{imageId}        → an encrypted image
+    //   users/{uid}/vaultImages/{imageId}                  → an encrypted gallery image (no snippet)
     match /users/{uid}/meta/{docId} {
       allow read, delete: if request.auth != null && request.auth.uid == uid;
       allow create, update: if request.auth != null && request.auth.uid == uid
@@ -66,32 +95,20 @@ service cloud.firestore {
     }
 
     // A vault image is either sealed inline (`enc`) or a pointer to the ciphertext hosted
-    // on imgbb (`remote`) — never both, so a hosted image is ~300 bytes instead of ~700 KB.
-    // Only the shape/size is checkable; the bytes are unreadable either way.
+    // on imgbb (`remote`) — the shared `isSealedImage()` above only ever checks shape/size.
     match /users/{uid}/vault/{itemId}/images/{imageId} {
       allow read, delete: if request.auth != null && request.auth.uid == uid;
       allow create, update: if request.auth != null && request.auth.uid == uid
-        && (
-          (
-            'enc' in request.resource.data
-            && request.resource.data.enc.iv is string && request.resource.data.enc.iv.size() <= 64
-            && request.resource.data.enc.ct is string && request.resource.data.enc.ct.size() <= 950000
-          ) || (
-            'remote' in request.resource.data
-            && request.resource.data.remote.url is string
-            && request.resource.data.remote.url.matches('^https://.*')
-            && request.resource.data.remote.url.size() <= 600
-            && request.resource.data.remote.iv is string && request.resource.data.remote.iv.size() <= 64
-            && request.resource.data.remote.sha is string && request.resource.data.remote.sha.size() <= 64
-            && request.resource.data.remote.bytes is int
-            && request.resource.data.remote.bytes > 0
-            && request.resource.data.remote.bytes <= 4000000
-            && (!('delete_url' in request.resource.data.remote)
-                || request.resource.data.remote.delete_url == null
-                || (request.resource.data.remote.delete_url is string
-                    && request.resource.data.remote.delete_url.size() <= 600))
-          )
-        );
+        && isSealedImage();
+    }
+
+    // The vault gallery: sealed images that belong to no snippet. Same shape rules as the
+    // item images, plus `created_at` — the one plaintext field, needed only to sort the grid.
+    match /users/{uid}/vaultImages/{imageId} {
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.created_at is string && request.resource.data.created_at.size() <= 40
+        && isSealedImage();
     }
 
     match /users/{uid}/vault/{itemId} {

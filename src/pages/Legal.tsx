@@ -116,13 +116,13 @@ export function Privacy() {
       </p>
 
       <h2 id="collected">2. Information we collect</h2>
-      <p><strong>Account information.</strong> Your email address; your display name and profile picture if you sign in with Google; and authentication records (sign-in times, sign-in provider) managed by Firebase Authentication. Your password is converted into a salted cryptographic hash by Google’s authentication service — we never receive, store, or are able to see your password.</p>
+      <p><strong>Account information.</strong> Your email address; your display name and profile picture if you use third-party sign-in; and authentication records (sign-in times, sign-in provider) managed by our authentication service. Your password is converted into a salted cryptographic hash by that service — we never receive, store, or are able to see your password.</p>
       <p><strong>Your content.</strong> Everything you create in the Service: snippets (title, description, code, notes, Pages/rich-text documents, tags, groups, favourites), images you attach, version history used by the Restore feature, and created/updated timestamps.</p>
       <p><strong>Images.</strong> Images attached to ordinary snippets are stored inside your library data. Images used in the Vault are encrypted on your device first, then (optionally) uploaded to an image host as ciphertext, together with the deletion token that lets you remove them later.</p>
       <p><strong>Public share links.</strong> When you create a link we store: a random link token, the title and kind (snippet or group), your account id, creation time, an optional expiry time, and a view counter. The shared content itself is your existing snippet, rendered read-only.</p>
       <p><strong>The Vault.</strong> Ciphertext, initialization vectors, your KDF salt and iteration count, wrapped data keys, recovery material, and limited bookkeeping metadata (identifiers, item type, timestamps). Your passphrase and the keys derived from it never leave your device.</p>
       <p><strong>Device preferences &amp; local storage.</strong> Theme/accent choices, app-lock configuration and attempt state, recent searches, an offline copy of your data (IndexedDB/localStorage) so the app keeps working without a connection, and the service-worker cache of app files.</p>
-      <p><strong>Service logs.</strong> Our infrastructure providers (Google Firebase and the hosting provider — Firebase Hosting or Vercel) automatically process standard technical request data — IP address, browser/device type, requested pages, timestamps, and error reports — to deliver, secure, and debug the Service. We do not use this data for profiling.</p>
+      <p><strong>Service logs.</strong> Our infrastructure providers (our database and authentication provider, and our hosting provider) automatically process standard technical request data — IP address, browser/device type, requested pages, timestamps, and error reports — to deliver, secure, and debug the Service. We do not use this data for profiling.</p>
       <p><strong>What we do not collect:</strong> advertising identifiers, analytics or tracking SDKs, behavioural profiles, contacts, precise location, camera or microphone access (beyond images you deliberately attach), and payment information — the Service is free.</p>
 
       <h2 id="usage">3. How we use information</h2>
@@ -153,10 +153,10 @@ export function Privacy() {
       <h2 id="sharing">5. When information is shared</h2>
       <p>We share information only with processors needed to run the Service:</p>
       <ul>
-        <li><strong>Google Firebase</strong> (Authentication, Firestore) — stores your account and data per Google’s privacy policy and data-processing terms.</li>
-        <li><strong>Hosting provider</strong> (Firebase Hosting and/or Vercel) — serves the app files and sees standard request logs.</li>
-        <li><strong>Image host (imgbb)</strong> — receives only encrypted vault images and their deletion token; it never sees readable content or your account.</li>
-        <li><strong>CDN (jsdelivr)</strong> — delivers the Pyodide runtime used by the Python runner; receives only ordinary script-request logs.</li>
+        <li><strong>Authentication &amp; database provider</strong> — stores your account and data under that provider’s privacy policy and data-processing terms.</li>
+        <li><strong>Hosting provider</strong> — serves the app files and sees standard request logs.</li>
+        <li><strong>Image host</strong> — receives only encrypted vault images and their deletion token; it never sees readable content or your account.</li>
+        <li><strong>Content delivery network</strong> — delivers the runtime used by the in-browser Python runner; receives only ordinary script-request logs.</li>
         <li><strong>Legal requirement</strong> — if we are compelled by law, court order, or to protect the rights and safety of others.</li>
         <li><strong>Business transfer</strong> — if the Service is ever transferred in a merger or acquisition, this policy continues to apply unless you are notified otherwise.</li>
       </ul>
@@ -186,8 +186,8 @@ export function Privacy() {
       <p>
         Our providers operate global infrastructure; your data may be processed in countries other than
         yours. Where personal data is transferred internationally, transfers rely on safeguards such as
-        standard contractual clauses or adequacy decisions provided by the processor (Google’s Data
-        Processing Terms for Firebase; the hosting provider’s equivalent terms).
+        standard contractual clauses or adequacy decisions provided by the processor (each provider’s
+        data-processing terms and equivalent contractual safeguards).
       </p>
 
       <h2 id="children">9. Children</h2>
@@ -199,7 +199,7 @@ export function Privacy() {
 
       <h2 id="security">10. Security</h2>
       <p>
-        We protect the Service with encryption in transit (TLS), strict Firestore security rules,
+        We protect the Service with encryption in transit (TLS), strict server-side access rules,
         client-side encryption for the Vault, a sandboxed code runner, and a Content-Security-Policy.
         The optional app lock is a privacy screen for an unlocked device — it is not an account security
         boundary. No method of transmission or storage is 100% secure: choose a strong, unique password,
@@ -209,10 +209,11 @@ export function Privacy() {
       <h2 id="cookies">11. Cookies &amp; local storage</h2>
       <p>
         We do not use advertising or analytics cookies. Essential storage only: your sign-in session
-        (held by Firebase in IndexedDB), theme and app-lock preferences, recent searches, your offline
-        data cache, and the service-worker cache that makes the app start instantly. The Google sign-in
-        popup may set cookies under Google’s own policy. You can clear local data at any time in your
-        browser settings — doing so removes your offline copy (your server data stays).
+        (held in your browser’s local storage), theme and app-lock preferences, recent searches, your
+        offline data cache, and the service-worker cache that makes the app start instantly. A
+        third-party sign-in popup may set cookies under that provider’s own policy. You can clear local
+        data at any time in your browser settings — doing so removes your offline copy (your server data
+        stays).
       </p>
 
       <h2 id="changes">12. Changes to this policy</h2>
@@ -340,10 +341,11 @@ export function Terms() {
 
       <h2 id="third-parties">9. Third-party services</h2>
       <p>
-        The Service relies on third parties — Google Firebase (auth/database), the hosting provider, an
-        image host for encrypted vault images, and a CDN for the Python runtime. Their terms and
-        privacy policies govern your use of them, and we are not responsible for their acts or omissions.
-        References to them are for convenience, not endorsement.
+        The Service relies on third parties — an authentication and database provider, a hosting
+        provider, an image host for encrypted vault images, and a content delivery network for the
+        in-browser Python runtime. Their terms and privacy policies govern your use of them, and we
+        are not responsible for their acts or omissions. References to them are for convenience, not
+        endorsement.
       </p>
 
       <h2 id="disclaimers">10. Service changes &amp; disclaimers</h2>

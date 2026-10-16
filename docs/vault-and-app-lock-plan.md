@@ -85,6 +85,7 @@ users/{uid}/meta/vault                      → KDF params + wrapped key (not se
 users/{uid}/vault/{itemId}                  → encrypted snippet + a few non-sensitive routing fields
 users/{uid}/vault/{itemId}/images/{imgId}   → { iv, ct }  (encrypted image bytes)
 users/{uid}/vault/{itemId}/versions/{vid}   → { iv, ct }  (encrypted version snapshot)
+users/{uid}/vaultImages/{imgId}             → { iv, ct } + created_at  (standalone gallery image, no snippet)
 ```
 
 **`users/{uid}/meta/vault`**

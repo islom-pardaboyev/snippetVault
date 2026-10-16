@@ -8,10 +8,11 @@ import { compressAll } from "../lib/images";
 import { newId } from "../lib/utils";
 import type { Snippet, SnippetImage } from "../lib/types";
 import {
-  deleteSnippetImages, deleteSnippetVersions, deleteVaultImage, deleteVaultItem, entryOf, getVaultMeta,
-  listVaultImages, makeVaultItem, openPayload, openVaultImage, putVaultImage, putVaultItem, putVaultMeta,
-  readSnippetImages, sealForVault, sealPayload, snippetOf, watchVaultItems, writeSnippetImage,
-  type VaultEntry, type VaultImage, type VaultItem, type VaultMeta, type VaultPayload,
+  deleteGalleryImage, deleteSnippetImages, deleteSnippetVersions, deleteVaultImage, deleteVaultItem,
+  entryOf, getVaultMeta,
+  listVaultImages, makeVaultItem, openPayload, openVaultImage, putGalleryImage, putVaultImage, putVaultItem, putVaultMeta,
+  readSnippetImages, sealForVault, sealPayload, snippetOf, watchGalleryImages, watchVaultItems, writeSnippetImage,
+  type VaultEntry, type VaultGalleryImage, type VaultImage, type VaultItem, type VaultMeta, type VaultPayload,
 } from "../lib/vault";
 import { revokeShare } from "../lib/share";
 
@@ -48,6 +49,18 @@ interface VaultCtx {
   removeImage(id: string, imageId: string): Promise<void>;
   /** Decrypt a slice of an item's images, so the gallery can show them a page at a time. */
   loadImages(id: string, offset?: number, limit?: number): Promise<SnippetImage[]>;
+  /** Encrypted records of the standalone gallery (the Images section on `/vault`). */
+  gallery: VaultGalleryImage[];
+  /**
+   * Add standalone images to the vault gallery. Same pipeline as item images: every file is
+   * encrypted on this device first, then hosted on imgbb when a key is configured (inline
+   * fallback otherwise).
+   */
+  addGalleryImages(files: File[]): Promise<{ added: number; error?: string }>;
+  /** Delete a gallery image: the Firestore record first, then its ciphertext on imgbb. */
+  removeGalleryImage(imageId: string): Promise<void>;
+  /** Decrypt a slice of the gallery, so the grid loads a page at a time. */
+  loadGalleryImages(offset?: number, limit?: number): Promise<SnippetImage[]>;
 }
 
 const Ctx = createContext<VaultCtx | null>(null);
@@ -62,9 +75,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   const [meta, setMeta] = useState<VaultMeta | null>(null);
   const [items, setItems] = useState<VaultItem[]>([]);
   const [entries, setEntries] = useState<VaultEntry[]>([]);
+  const [gallery, setGallery] = useState<VaultGalleryImage[]>([]);
   const keyRef = useRef<CryptoKey | null>(null);
   /** Image records per item, so paging the gallery doesn't re-download every record each time. */
   const imageMeta = useRef<Map<string, VaultImage[]>>(new Map());
+  /** Mirror of `gallery`, so `loadGalleryImages` keeps a stable identity across snapshots. */
+  const galleryRef = useRef<VaultGalleryImage[]>([]);
 
   /* load the vault metadata once we know who is signed in */
   useEffect(() => {
@@ -87,6 +103,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!uid || DEMO) { setItems([]); return; }
     return watchVaultItems(uid, setItems);
+  }, [uid]);
+
+  /* live list of the standalone gallery — ciphertext, so it is safe to watch while locked */
+  useEffect(() => {
+    if (!uid || DEMO) { galleryRef.current = []; setGallery([]); return; }
+    return watchGalleryImages(uid, (list) => { galleryRef.current = list; setGallery(list); });
   }, [uid]);
 
   const lock = useCallback(() => {
@@ -265,11 +287,48 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     }
   }, [uid, items]);
 
+  /* ------------------------------------------- standalone gallery */
+
+  const addGalleryImages = useCallback(async (files: File[]): Promise<{ added: number; error?: string }> => {
+    const key = keyRef.current;
+    if (!uid || !key) throw new Error("Unlock the vault first.");
+
+    const { ok, error } = await compressAll(files);
+    if (!ok.length) return { added: 0, error: error ?? "No image files to add." };
+
+    // Same order as item images: encrypt on this device, then hand the ciphertext to the
+    // host (inline fallback when imgbb isn't configured) — nothing plaintext ever leaves.
+    for (const c of ok) {
+      const image: SnippetImage = {
+        id: newId(), data: c.data, w: c.w, h: c.h, size: c.size, created_at: new Date().toISOString(),
+      };
+      await putGalleryImage(uid, { ...(await sealForVault(key, image)), created_at: image.created_at });
+    }
+    return error ? { added: ok.length, error } : { added: ok.length };
+  }, [uid]);
+
+  const removeGalleryImage = useCallback(async (imageId: string) => {
+    if (!uid) throw new Error("Sign in to use the vault.");
+    await deleteGalleryImage(uid, imageId);
+  }, [uid]);
+
+  const loadGalleryImages = useCallback(async (offset = 0, limit?: number): Promise<SnippetImage[]> => {
+    const key = keyRef.current;
+    if (!key) return [];
+    const all = galleryRef.current;
+    const slice = limit === undefined ? all.slice(offset) : all.slice(offset, offset + limit);
+    // One unreadable blob (offline tab, host hiccup) must not blank the whole page —
+    // drop just that tile; the record stays and can be retried on the next load.
+    const opened = await Promise.all(slice.map((im) => openVaultImage(key, im).catch(() => null)));
+    return opened.filter((im): im is SnippetImage => im !== null);
+  }, []);
+
   const value = useMemo<VaultCtx>(() => ({
-    available, status, items, entries, recoveryAvailable: !!meta?.recovery_wrapped_dek,
+    available, status, items, entries, gallery, recoveryAvailable: !!meta?.recovery_wrapped_dek,
     setup, unlock, unlockWithRecovery, lock, changePassphrase,
     moveIn, moveGroupIn, moveOut, updateEntry, deleteEntry, addImages, removeImage, loadImages,
-  }), [available, status, items, entries, meta, setup, unlock, unlockWithRecovery, lock, changePassphrase, moveIn, moveGroupIn, moveOut, updateEntry, deleteEntry, addImages, removeImage, loadImages]);
+    addGalleryImages, removeGalleryImage, loadGalleryImages,
+  }), [available, status, items, entries, gallery, meta, setup, unlock, unlockWithRecovery, lock, changePassphrase, moveIn, moveGroupIn, moveOut, updateEntry, deleteEntry, addImages, removeImage, loadImages, addGalleryImages, removeGalleryImage, loadGalleryImages]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

@@ -9,7 +9,8 @@ type MaybeHosted = { remote?: { delete_url?: string | null } };
 
 /**
  * Deletes every document the user owns: snippets (+ their images and versions), groups, and
- * the whole vault (items, sealed images, KDF meta). The Auth account is handled separately.
+ * the whole vault (items, sealed images, the standalone gallery, KDF meta). The Auth account
+ * is handled separately.
  *
  * Deleting the Firestore pointer of a *hosted* vault image is not enough: the ciphertext at
  * imgbb would outlive the account. So the `delete_url`s are collected while the records are
@@ -45,6 +46,13 @@ export async function wipeUserData(uid: string) {
     });
     refs.push(v.ref);
   }
+  // The standalone vault gallery — encrypted images attached to no snippet. Same contract:
+  // collect `delete_url`s while the records are readable, then purge the host after the wipe.
+  const gallery = await getDocs(collection(db, "users", uid, "vaultImages"));
+  gallery.docs.forEach((d) => {
+    collectHosted(d.data());
+    refs.push(d.ref);
+  });
   const meta = await getDocs(collection(db, "users", uid, "meta"));
   meta.docs.forEach((d) => refs.push(d.ref));
 
