@@ -133,8 +133,21 @@ const subscribe = (cb: () => void) => { subs.add(cb); return () => { subs.delete
 export const isIOS = () =>
   typeof navigator !== "undefined" &&
   (/iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
+
+/** Every display mode that means "running as an app", not in a browser tab. */
+const STANDALONE_QUERY =
+  "(display-mode: standalone), (display-mode: minimal-ui), (display-mode: fullscreen)";
+
+/**
+ * True when the page is the *installed* app rather than a browser tab — any standalone-ish
+ * display mode, iOS's `navigator.standalone`, or the TWA referrer. Breadth is deliberate: a
+ * false negative would wrongly treat the app as a visitor, which is the one mistake this code
+ * must never make (it would show the phone landing page *inside* the app).
+ */
 export const isStandalone = () =>
-  matchMedia("(display-mode: standalone)").matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  matchMedia(STANDALONE_QUERY).matches ||
+  (typeof navigator !== "undefined" && (navigator as Navigator & { standalone?: boolean }).standalone === true) ||
+  isTwa();
 
 export function useInstall() {
   const evt = useSyncExternalStore(subscribe, () => deferred, () => null);
@@ -163,6 +176,10 @@ export const isAndroid = () =>
 export const isMobileUA = () =>
   typeof navigator !== "undefined" && /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
 
+/** A phone or tablet: a mobile UA, or a coarse pointer on a phone-sized viewport (iPad UA is not). */
+export const isMobileDevice = () =>
+  isMobileUA() || (matchMedia("(pointer: coarse)").matches && innerWidth < 900);
+
 /** Reactive `matchMedia`, seeded synchronously so the first paint is already correct. */
 export function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(() => typeof window !== "undefined" && matchMedia(query).matches);
@@ -176,21 +193,9 @@ export function useMediaQuery(query: string): boolean {
   return matches;
 }
 
-/**
- * True when the page is the *installed* app rather than a browser tab — any standalone-ish
- * display mode, iOS's `navigator.standalone`, or the TWA referrer. Breadth is deliberate: a
- * false negative would wrongly show the landing page inside the app, which is the one mistake
- * this feature must never make.
- */
+/** Reactive counterpart of `isStandalone` — re-renders when the display mode changes. */
 export function useInstalledApp(): boolean {
-  const display = useMediaQuery(
-    "(display-mode: standalone), (display-mode: minimal-ui), (display-mode: fullscreen)",
-  );
-  const [iosStandalone] = useState(
-    () => typeof navigator !== "undefined" &&
-      (navigator as Navigator & { standalone?: boolean }).standalone === true,
-  );
-  return display || iosStandalone || isTwa();
+  return useMediaQuery(STANDALONE_QUERY) || isStandalone();
 }
 
 const landingDismissed = () => {

@@ -73,6 +73,10 @@ Outputs:
 - `app-release-signed.apk` — sideload test build
 - `app-release-bundle.aab` — what Play accepts
 
+> The signed APK is also published at **`public/snippetvault.apk`** (served as
+> `/snippetvault.apk`) for the site's *Download APK* links. Re-copy it whenever you rebuild:
+> `cp android/app-release-signed.apk public/snippetvault.apk`
+
 Test on a device/emulator (`adb` running):
 
 ```bash
@@ -147,4 +151,4 @@ key), package-name typo, or the file not reachable at `https://<domain>/.well-kn
 | Google sign-in popup blocked | You are testing a non-TWA wrapper (Capacitor) — popups only work in this TWA route |
 | Google sign-in fails with `auth/unauthorized-domain` | Add the domain in Firebase → Authentication → Settings → Authorized domains |
 | Old design after deploy | Hard-close the app once (swipe away) if a cached shell lingers |
-| A phone's browser shows an "install the app" page | Expected — small screens are sent to the app. "Continue on the web instead" opts that device out |
+| A phone's browser shows an "install the app" page | Expected — small screens are sent to the app. "Continue on the web instead" opts that device out; the APK stays reachable from the header account menu → **Download APK** |

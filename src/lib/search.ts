@@ -196,11 +196,6 @@ export function activeFilters(raw: string): FilterChip[] {
   return out;
 }
 
-/** Free-text portion of a query (operator tokens stripped) — handy for placeholders. */
-export function freeText(raw: string): string {
-  return tokenize(raw).filter((t) => !/^[a-z]+:/i.test(t) || !OPERATORS.has(t.split(":")[0].toLowerCase())).join(" ").trim();
-}
-
 /** Add a token to a query, or remove it when it is already present. */
 export function toggleToken(raw: string, token: string): string {
   const toks = tokenize(raw);

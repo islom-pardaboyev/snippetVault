@@ -8,7 +8,7 @@
  *
  * Per device (decision D8): nothing here is synced — a new device sets its own code.
  */
-import { randomBytes, toBase64, fromBase64 } from "./crypto";
+import { randomBytes, toBase64, fromBase64, utf8 } from "./crypto";
 
 /** Work factor for hashing the code. Lower than the Vault's KDF: this is a local gate, not encryption. */
 export const APP_LOCK_ITERATIONS = 200_000;
@@ -25,8 +25,6 @@ export const MAX_CODE_LEN = 12;
 
 /** Default auto-lock window when the lock is first turned on. */
 export const DEFAULT_AUTOLOCK_MS = 5 * 60_000;
-
-const utf8 = (s: string) => new Uint8Array(new TextEncoder().encode(s));
 
 /** Persisted app-lock config, base64 fields, stored in `localStorage`. */
 export interface AppLockConfig {

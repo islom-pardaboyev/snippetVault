@@ -10,11 +10,26 @@
  * unit-tested; `useAppLanding()` in `hooks/ui.tsx` supplies the live browser signals.
  */
 
-const DEFAULT_ANDROID_APP_URL = "https://play.google.com/store/apps/details?id=com.snippetvault.app";
+/**
+ * The signed release APK published alongside the site (kept in `public/`, served from the site's
+ * own origin so the download needs no third party). Rebuild it with `bubblewrap build` inside
+ * `android/` and copy it here — see SETUP.md → *Small screens*.
+ */
+export const APK_URL = "/snippetvault.apk";
 
-/** Where "Install the app" sends a phone visitor. Override with VITE_ANDROID_APP_URL. */
+/** The file a "Download APK" link should save as. */
+export const APK_FILE = "SnippetVault.apk";
+
+/**
+ * Where "Install the app" sends a phone visitor. Defaults to the APK served by this site, which
+ * works today; set VITE_ANDROID_APP_URL to your Play listing once the app is published.
+ * (Play listing form: https://play.google.com/store/apps/details?id=com.snippetvault.app)
+ */
 export const ANDROID_APP_URL =
-  (import.meta.env.VITE_ANDROID_APP_URL ?? "").trim() || DEFAULT_ANDROID_APP_URL;
+  (import.meta.env.VITE_ANDROID_APP_URL ?? "").trim() || APK_URL;
+
+/** True while the CTA points at a file to download rather than a store page. */
+export const ANDROID_URL_IS_APK = ANDROID_APP_URL.endsWith(".apk");
 
 /** The app is never offered a window narrower than this; at or above it the full site is shown. */
 export const LANDING_MIN_WIDTH = 768;

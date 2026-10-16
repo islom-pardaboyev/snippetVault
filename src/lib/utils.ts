@@ -1,5 +1,5 @@
 import type { Snippet } from "./types";
-import { MAX_NOTE_HTML, noteText, noteToHtml } from "./note";
+import { MAX_NOTE_HTML, escapeHtml, noteText, noteToHtml } from "./note";
 
 /**
  * A "page" is a snippet whose content is rich text instead of code. It is chosen from the same
@@ -86,10 +86,6 @@ export function toMarkdown(s: CodeLike) {
   if (isPage(s.language)) return noteText(s.notes).trim() || s.title;
   return "```" + s.language.toLowerCase() + "\n" + s.code + "\n```";
 }
-
-/** Escape text for safe use inside HTML. Matches the escaping in `lib/note.ts`. */
-export const escapeHtml = (s: string) =>
-  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
 /** A `<pre><code>` block, ready to paste into a blog or chat that takes HTML (a page keeps its HTML). */
 export function toHtml(s: CodeLike) {

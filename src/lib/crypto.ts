@@ -63,7 +63,7 @@ export class DecryptionError extends Error {
 // Web Crypto's `BufferSource` requires a non-shared `ArrayBuffer`, so these helpers
 // are explicit about producing `Uint8Array<ArrayBuffer>`.
 
-const utf8 = (s: string): Uint8Array<ArrayBuffer> => new Uint8Array(new TextEncoder().encode(s));
+export const utf8 = (s: string): Uint8Array<ArrayBuffer> => new Uint8Array(new TextEncoder().encode(s));
 
 export function randomBytes(n: number): Uint8Array<ArrayBuffer> {
   const b = new Uint8Array(n);

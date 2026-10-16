@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
 import { Icon } from "./Icon";
 import { LogoMark } from "./Logo";
-import { useInstall } from "../hooks/ui";
+import { isMobileDevice, useInstall } from "../hooks/ui";
 
 const KEY = "sv:install-dismissed";
 const WEEK = 7 * 864e5;
-const isMobile = () => /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent) || (matchMedia("(pointer: coarse)").matches && innerWidth < 900);
 
 /** Bottom sheet inviting mobile visitors to install the PWA. */
 export function InstallPrompt({ aboveNav = false }: { aboveNav?: boolean }) {
@@ -13,7 +12,7 @@ export function InstallPrompt({ aboveNav = false }: { aboveNav?: boolean }) {
   const [open, setOpen] = useState(false);
   const [steps, setSteps] = useState(false);
 
-  const eligible = (canInstall || ios) && isMobile();
+  const eligible = (canInstall || ios) && isMobileDevice();
 
   useEffect(() => {
     if (!eligible) { setOpen(false); return; }

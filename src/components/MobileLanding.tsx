@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Icon, type IconName } from "./Icon";
 import { LogoMark } from "./Logo";
 import { isIOS } from "../hooks/ui";
-import { ANDROID_APP_URL } from "../lib/app";
+import { ANDROID_APP_URL, ANDROID_URL_IS_APK, APK_FILE } from "../lib/app";
 
 /**
  * Shown to phone-sized *browser* visits (see `useAppLanding`). The app is a large-screen
@@ -23,6 +23,7 @@ const FEATURES: { icon: IconName; label: string }[] = [
 export function MobileLanding({ onContinue }: { onContinue: () => void }) {
   const [steps, setSteps] = useState(false);
   const ios = isIOS();
+  const isApk = ANDROID_URL_IS_APK;
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-bg text-ink">
@@ -58,8 +59,10 @@ export function MobileLanding({ onContinue }: { onContinue: () => void }) {
             </button>
           ) : (
             <a className="btn btn-primary btn-lg btn-wide" href={ANDROID_APP_URL}
-              target="_blank" rel="noopener noreferrer">
-              <Icon name="download" size={17} /> Install the app
+              download={isApk ? APK_FILE : undefined}
+              target={isApk ? undefined : "_blank"}
+              rel={isApk ? undefined : "noopener noreferrer"}>
+              <Icon name="download" size={17} /> {isApk ? "Download the app" : "Install the app"}
             </a>
           )}
 
@@ -74,6 +77,11 @@ export function MobileLanding({ onContinue }: { onContinue: () => void }) {
           <p className="mt-3 text-center text-[12.5px] text-faint">
             Free · Android 7.0 and up · your vault key never leaves your device
           </p>
+          {isApk ? (
+            <p className="mt-1.5 text-center text-[12px] text-faint">
+              Open the file to install — your phone may ask you to allow installs from this source.
+            </p>
+          ) : null}
         </div>
 
         <div className="mt-auto pt-9">

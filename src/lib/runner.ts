@@ -41,11 +41,6 @@ function createFrame(): HTMLIFrameElement {
   return f;
 }
 
-export function resetPython() {
-  pyFrame?.remove();
-  pyFrame = null;
-}
-
 export function runSnippet(language: string, code: string, h: RunHandlers): { stop(): void } {
   const kind = language === "Python" ? "py" : "js";
   const limit = kind === "py" ? LIMIT_PY_MS : LIMIT_JS_MS;

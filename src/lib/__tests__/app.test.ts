@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { shouldShowAppLanding } from "../app";
+import { ANDROID_APP_URL, APK_URL, shouldShowAppLanding } from "../app";
+
+describe("android app links", () => {
+  it("offers a working install target rather than an empty href", () => {
+    expect(APK_URL).toBe("/snippetvault.apk");
+    expect(ANDROID_APP_URL).not.toBe("");
+    expect(ANDROID_APP_URL.startsWith("/") || /^https:\/\//.test(ANDROID_APP_URL)).toBe(true);
+  });
+});
 
 describe("shouldShowAppLanding", () => {
   const phone = { standalone: false, narrowViewport: true, mobileDevice: true };

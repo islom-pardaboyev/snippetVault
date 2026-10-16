@@ -45,8 +45,18 @@ The installed app (TWA or added-to-home-screen PWA) and larger screens always ge
 `/share/*`, `/privacy` and `/terms` stay reachable on every device. A visitor who taps **Continue on
 the web instead** is never asked again (`localStorage: sv:mobile-web`).
 
-Set `VITE_ANDROID_APP_URL` to point "Install the app" somewhere other than the Play listing — a
-direct APK URL is handy before publishing.
+The site serves its own signed APK at **`/snippetvault.apk`** (kept in `public/`), so the install
+path works with no Play account: the landing page's **Download the app** button and the **Download
+APK** item in the header's account menu (Android phones browsing the site) both point at it. After
+rebuilding the app, refresh it:
+
+```
+cd android && bubblewrap build
+cp android/app-release-signed.apk public/snippetvault.apk
+```
+
+Once the app is published on Play, set `VITE_ANDROID_APP_URL` to the listing URL so the landing
+button sends people to the store instead of the file.
 
 ## What's inside
 
@@ -56,6 +66,5 @@ direct APK URL is handy before publishing.
 | `src/pages/` | Login, Library, Detail, Editor, Insights, NotFound (404), Offline |
 | `src/components/` | Shell, CommandPalette, SettingsDialog, CodeBlock, SnippetCard |
 | `src/lib/highlight.ts` | dependency-free syntax highlighter (15 languages) |
-| `legacy/` | the previous single-file version |
 
 Shortcuts: `⌘K` palette · `/` search · `N` new · `C` copy · `E` edit · `F` favourite · `⌘↵` save.
