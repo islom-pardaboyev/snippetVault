@@ -192,8 +192,8 @@ function GallerySection() {
         onAdd={onAdd}
         onRemove={onRemove}
         hint={hasImgbb()
-          ? `${total} image${total === 1 ? "" : "s"} · encrypted here first, then hosted on imgbb as ciphertext.`
-          : "Stored inline in Firestore. Add `IMB_API` to .env to host gallery images on imgbb instead."}
+          ? `${total} image${total === 1 ? "" : "s"} · encrypted here first, then hosted on the service as ciphertext.`
+          : "Stored inline in the service. Add variable to .env to host gallery images on the service instead."}
       />
       {images.length < total && !exhausted && (
         <button className="btn mt-3" onClick={loadMore} disabled={decrypting}>
