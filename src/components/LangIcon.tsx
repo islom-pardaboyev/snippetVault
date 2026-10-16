@@ -21,6 +21,15 @@ export function LangIcon({ lang, size = 18, className = "" }: { lang: string; si
       </svg>
     );
   }
+  if (lang === "Page") {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} className={`shrink-0 ${className}`} aria-hidden="true">
+        <path d="M6 2.75h7.1L19.5 9.2v12.05H6z" fill={color} opacity=".9" />
+        <path d="M13.1 2.75V9.2h6.4" fill="none" stroke="#0a0b0d" strokeWidth="1.6" strokeLinejoin="round" />
+        <path d="M9 12.4h6.2M9 15.4h6.2M9 18.4h3.6" fill="none" stroke="#0a0b0d" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+    );
+  }
   const path = PATHS[lang];
   if (!path) {
     return (

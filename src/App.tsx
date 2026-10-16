@@ -1,22 +1,33 @@
 import { lazy, Suspense, useEffect } from "react";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "./hooks/auth";
+import { useAppLock } from "./hooks/applock";
 import { SnippetsProvider } from "./hooks/snippets";
+import { VaultProvider } from "./hooks/vault";
 import { useOnline } from "./hooks/ui";
 import { Shell } from "./components/Shell";
 import { LogoMark } from "./components/Logo";
-import { Login } from "./pages/Login";
 import { Library } from "./pages/Library";
-import { Detail } from "./pages/Detail";
 import { NotFound } from "./pages/NotFound";
-import { Groups } from "./pages/Groups";
 import { Offline } from "./pages/Offline";
 import { InstallPrompt } from "./components/InstallPrompt";
-import { Admin } from "./pages/Admin";
+import { LockScreen } from "./components/LockScreen";
 
 const Editor = lazy(() => import("./pages/Editor").then((m) => ({ default: m.Editor })));
 const Insights = lazy(() => import("./pages/Insights").then((m) => ({ default: m.Insights })));
+const Detail = lazy(() => import("./pages/Detail").then((m) => ({ default: m.Detail })));
+const Login = lazy(() => import("./pages/Login").then((m) => ({ default: m.Login })));
+const Groups = lazy(() => import("./pages/Groups").then((m) => ({ default: m.Groups })));
+const SharedSnippets = lazy(() => import("./pages/SharedSnippets").then((m) => ({ default: m.SharedSnippets })));
+const Admin = lazy(() => import("./pages/Admin").then((m) => ({ default: m.Admin })));
+const Shared = lazy(() => import("./pages/Shared").then((m) => ({ default: m.Shared })));
+const VaultPage = lazy(() => import("./pages/Vault").then((m) => ({ default: m.Vault })));
+const VaultDetailPage = lazy(() => import("./pages/Vault").then((m) => ({ default: m.VaultDetail })));
+
 const Fallback = () => <div className="skeleton mx-auto h-72 max-w-[1240px] rounded-card" />;
+const Page = ({ C }: { C: React.ComponentType }) => (
+  <Suspense fallback={<Fallback />}><C /></Suspense>
+);
 
 function Splash() {
   return (
@@ -28,45 +39,66 @@ function Splash() {
 
 function Gate() {
   const { status } = useAuth();
+  const { enabled: lockEnabled, locked } = useAppLock();
   const online = useOnline();
 
   useEffect(() => { document.title = "SnippetVault"; }, []);
 
   const { pathname } = useLocation();
-  const known = /^\/($|favorites$|insights$|groups$|new$|lang\/[^/]+$|tag\/[^/]+$|group\/[^/]+$|s\/[^/]+(\/edit)?$|admin$)/.test(pathname);
+  const known = /^\/($|favorites$|insights$|groups$|shared$|vault$|vault\/[^/]+$|new$|lang\/[^/]+$|tag\/[^/]+$|group\/[^/]+$|s\/[^/]+(\/edit)?$|admin$)/.test(pathname);
 
   if (status === "loading") return online ? <Splash /> : <Offline />;
   if (status === "out") {
     if (!online) return <Offline />;
-    return known ? <><Login /><InstallPrompt /></> : <NotFound />;
+    return known ? <><Page C={Login} /><InstallPrompt /></> : <NotFound />;
   }
+
+  if (lockEnabled && locked) return <LockScreen />;
 
   return (
     <SnippetsProvider>
-      <Routes>
-        <Route element={<Shell />}>
-          <Route index element={<Library mode="all" />} />
-          <Route path="favorites" element={<Library mode="favorites" />} />
-          <Route path="lang/:lang" element={<Library mode="lang" />} />
-          <Route path="tag/:tag" element={<Library mode="tag" />} />
-          <Route path="groups" element={<Groups />} />
-          <Route path="group/:group" element={<Library mode="group" />} />
-          <Route path="new" element={<Suspense fallback={<Fallback />}><Editor /></Suspense>} />
-          <Route path="s/:id" element={<Detail />} />
-          <Route path="s/:id/edit" element={<Suspense fallback={<Fallback />}><Editor /></Suspense>} />
-          <Route path="admin" element={<Admin />} />
-          <Route path="insights" element={<Suspense fallback={<Fallback />}><Insights /></Suspense>} />
-        </Route>
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+      <VaultProvider>
+        <Routes>
+          <Route element={<Shell />}>
+            <Route index element={<Library mode="all" />} />
+            <Route path="favorites" element={<Library mode="favorites" />} />
+            <Route path="lang/:lang" element={<Library mode="lang" />} />
+            <Route path="tag/:tag" element={<Library mode="tag" />} />
+            <Route path="groups" element={<Page C={Groups} />} />
+            <Route path="shared" element={<Page C={SharedSnippets} />} />
+            <Route path="vault" element={<Page C={VaultPage} />} />
+            <Route path="vault/:id" element={<Page C={VaultDetailPage} />} />
+            <Route path="group/:group" element={<Library mode="group" />} />
+            <Route path="new" element={<Suspense fallback={<Fallback />}><Editor /></Suspense>} />
+            <Route path="s/:id" element={<Page C={Detail} />} />
+            <Route path="s/:id/edit" element={<Suspense fallback={<Fallback />}><Editor /></Suspense>} />
+            <Route path="admin" element={<Page C={Admin} />} />
+            <Route path="insights" element={<Suspense fallback={<Fallback />}><Insights /></Suspense>} />
+          </Route>
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </VaultProvider>
     </SnippetsProvider>
   );
+}
+
+function Root() {
+  const { pathname } = useLocation();
+  if (/^\/share\//.test(pathname)) {
+    return (
+      <Routes>
+        <Route path="/share/:token" element={<Page C={Shared} />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    );
+  }
+  return <Gate />;
 }
 
 export default function App() {
   return (
     <BrowserRouter>
-      <Gate />
+      <Root />
     </BrowserRouter>
   );
 }

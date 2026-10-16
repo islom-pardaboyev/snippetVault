@@ -18,7 +18,7 @@ npm run dev        # http://localhost:5173
 
 ## Admin page (optional)
 
-Copy `.env.example` to `.env.local` and set `VITE_ADMIN_EMAIL` and `ADMIN_PASSCODE`. Restart `npm run dev` after changing them.
+Copy `.env.example` to `.env.local` and set `VITE_ADMIN_EMAIL` and `ADMIN_PASSCODE`. Restart `npm run dev` after changing them. Optionally add `IMB_API=<imgbb key>` to enable the Vault's unlimited (encrypted) images; without it vault images are stored inline in Firestore.
 
 ## Deploy
 

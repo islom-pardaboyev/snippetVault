@@ -1,16 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useSnippets } from "../hooks/snippets";
+import { useVault } from "../hooks/vault";
 import { useToast } from "../hooks/ui";
 import { SnippetCard } from "../components/SnippetCard";
 import { Icon } from "../components/Icon";
 import { lineCount, seedSnippets } from "../lib/utils";
+import { snippetOf } from "../lib/vault";
+import type { Snippet } from "../lib/types";
 import { useModal } from "../components/Modal";
 import { Select } from "../components/Select";
 import { LangIcon } from "../components/LangIcon";
 import { GroupEditDialog } from "../components/GroupEditDialog";
 import { AddToGroupDialog } from "../components/AddToGroupDialog";
 import { useNewGroup } from "../components/NewGroupDialog";
+import { SearchChips } from "../components/SearchChips";
+import { parseQuery, scoreSnippet, recentSearches, pushRecentSearch, clearRecentSearches } from "../lib/search";
 
 type Sort = "updated" | "created" | "title" | "language" | "size";
 const SORTS: [Sort, string][] = [["updated", "Updated"], ["created", "Newest"], ["title", "A → Z"], ["language", "Language"], ["size", "Longest"]];
@@ -18,19 +23,22 @@ const pref = (k: string, d: string) => { try { return localStorage.getItem(k) ??
 
 export function Library({ mode }: { mode: "all" | "favorites" | "lang" | "tag" | "group" }) {
   const { snippets, loaded, saveMany, remove, groupMeta, renameGroup, deleteGroup, updateGroup } = useSnippets();
+  const { available: vaultAvailable, status: vaultStatus, entries: vaultEntries, moveGroupIn } = useVault();
   const [editGroup, setEditGroup] = useState(false);
   const [addExisting, setAddExisting] = useState(false);
   const [selecting, setSelecting] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const params = useParams();
-  const [sp] = useSearchParams();
+  const [sp, setSp] = useSearchParams();
   const nav = useNavigate();
   const toast = useToast();
   const { confirm } = useModal();
   const [newGroup, newGroupDialog] = useNewGroup();
   const [sort, setSort] = useState<Sort>(() => pref("sv:sort", "updated") as Sort);
   const [view, setView] = useState<"grid" | "list">(() => pref("sv:view", "grid") as "grid" | "list");
-  const q = (sp.get("q") ?? "").trim().toLowerCase();
+  const q = (sp.get("q") ?? "").trim();
+  const parsed = useMemo(() => parseQuery(q), [q]);
+  const [recent, setRecent] = useState<string[]>(() => recentSearches());
   const lang = mode === "lang" ? params.lang : undefined;
   const tag = mode === "tag" ? params.tag : undefined;
   const group = mode === "group" ? params.group : undefined;
@@ -42,7 +50,13 @@ export function Library({ mode }: { mode: "all" | "favorites" | "lang" | "tag" |
     if (lang) l = l.filter((s) => s.language === lang);
     if (tag) l = l.filter((s) => s.tags.includes(tag));
     if (group) l = l.filter((s) => s.group === group);
-    if (q) l = l.filter((s) => `${s.title}\n${s.description}\n${s.code}\n${s.tags.join(" ")}`.toLowerCase().includes(q));
+    if (q) {
+      const scored = l
+        .map((s) => ({ s, score: scoreSnippet(s, parsed) }))
+        .filter((x): x is { s: (typeof snippets)[number]; score: number } => x.score !== null);
+      l = scored.map((x) => x.s);
+      if (parsed.terms.length) return l; // relevance order
+    }
     const by: Record<Sort, (a: typeof l[number], b: typeof l[number]) => number> = {
       updated: (a, b) => +new Date(b.updated_at) - +new Date(a.updated_at),
       created: (a, b) => +new Date(b.created_at) - +new Date(a.created_at),
@@ -51,9 +65,10 @@ export function Library({ mode }: { mode: "all" | "favorites" | "lang" | "tag" |
       size: (a, b) => lineCount(b.code) - lineCount(a.code),
     };
     return l.sort(by[sort]);
-  }, [snippets, mode, lang, tag, group, q, sort]);
+  }, [snippets, mode, lang, tag, group, q, parsed, sort]);
 
-  const heading = q ? `Results for “${sp.get("q")}”` : mode === "favorites" ? "Favourites" : lang ? lang : tag ? `#${tag}` : group ? group : "All snippets";
+  const heading = q ? `Results for “${q}”` : mode === "favorites" ? "Favourites" : lang ? lang : tag ? `#${tag}` : group ? group : "All snippets";
+  const onSearch = (v: string) => setSp(v ? { q: v } : {}, { replace: true });
   const setP = (k: string, v: string, set: (x: never) => void) => { set(v as never); try { localStorage.setItem(k, v); } catch { /* ignore */ } };
   const sections = useMemo(() => {
     const by = mode === "group" ? "language" : groupBy;
@@ -67,11 +82,39 @@ export function Library({ mode }: { mode: "all" | "favorites" | "lang" | "tag" |
       .sort((a, b) => (a[0] === "Ungrouped" ? 1 : b[0] === "Ungrouped" ? -1 : a[0].localeCompare(b[0])))
       .map(([name, items]) => ({ name, items }));
   }, [list, groupBy, mode]);
+  // Decrypted vault items are searchable while the vault is unlocked. They appear in their
+  // own read-only section — never part of multi-select, delete or group actions.
+  const vaultSnippets = useMemo(() => (vaultStatus === "unlocked" ? vaultEntries.map(snippetOf) : []), [vaultEntries, vaultStatus]);
+  const showVault = vaultStatus === "unlocked" && !!(q.trim() || lang || tag || group || mode === "favorites");
+  const vaultMatches = useMemo(() => {
+    if (!showVault) return [];
+    let l = vaultSnippets;
+    if (mode === "favorites") l = l.filter((s) => s.favorite);
+    if (lang) l = l.filter((s) => s.language === lang);
+    if (tag) l = l.filter((s) => s.tags.includes(tag));
+    if (group) l = l.filter((s) => s.group === group);
+    if (q) {
+      const scored = l
+        .map((s) => ({ s, score: scoreSnippet(s, parsed) }))
+        .filter((x): x is { s: Snippet; score: number } => x.score !== null);
+      l = scored.sort((a, b) => b.score - a.score).map((x) => x.s);
+    } else {
+      l = l.slice().sort((a, b) => +new Date(b.updated_at) - +new Date(a.updated_at));
+    }
+    return l;
+  }, [showVault, vaultSnippets, mode, lang, tag, group, q, parsed]);
+
   const exitSelect = () => { setSelecting(false); setPicked(new Set()); };
   const toggle = (id: string) => setPicked((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const allPicked = list.length > 0 && list.every((s) => picked.has(s.id));
   const chosen = list.filter((s) => picked.has(s.id));
   useEffect(() => { exitSelect(); }, [mode, group, lang, tag, q]);
+  // remember settled searches (debounced) so they can be re-run from the chips
+  useEffect(() => {
+    if (q.trim().length < 2) return;
+    const t = setTimeout(() => setRecent(pushRecentSearch(q)), 900);
+    return () => clearTimeout(t);
+  }, [q]);
   useEffect(() => {
     if (!selecting) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !document.querySelector("dialog[open]")) exitSelect(); };
@@ -127,6 +170,16 @@ export function Library({ mode }: { mode: "all" | "favorites" | "lang" | "tag" |
               </button>
               <button className="btn" onClick={() => setAddExisting(true)}><Icon name="library" size={16} /><span className="hidden sm:inline"> Add existing</span></button>
               <button className="btn" onClick={() => setEditGroup(true)}><Icon name="edit" size={16} /><span className="hidden sm:inline"> Edit</span></button>
+              {vaultAvailable && list.length > 0 && (
+                <button className="btn" title="Encrypt and move this whole group into the vault" onClick={async () => {
+                  if (vaultStatus !== "unlocked") { toast("Unlock your vault first"); nav("/vault"); return; }
+                  const ok = await confirm({ title: `Move “${group}” to the vault?`, description: `${list.length} snippet${list.length === 1 ? "" : "s"} will be encrypted and removed from your library.`, confirmLabel: "Move to vault", icon: "lock" });
+                  if (!ok) return;
+                  const n = await moveGroupIn(group);
+                  toast(`Moved ${n} snippet${n === 1 ? "" : "s"} to the vault`);
+                  nav("/vault");
+                }}><Icon name="lock" size={16} /><span className="hidden sm:inline"> Vault</span></button>
+              )}
               <button className="btn btn-danger btn-icon" aria-label="Delete group" onClick={async () => {
                 const ok = await confirm({ title: `Delete “${group}”?`, description: "Its snippets are kept — they just won't belong to any group.", confirmLabel: "Delete group", danger: true });
                 if (ok) { deleteGroup(group); nav("/", { replace: true }); toast("Group deleted"); }
@@ -167,6 +220,9 @@ export function Library({ mode }: { mode: "all" | "favorites" | "lang" | "tag" |
         </div>
       </div>
 
+      <SearchChips raw={q} languages={languages} onChange={(next) => onSearch(next)} recent={recent}
+        onClearRecent={() => { clearRecentSearches(); setRecent([]); }} />
+
       {group && (
         <Link to="/groups" className="mb-3 inline-flex items-center gap-1 text-sm font-medium text-muted hover:text-ink md:hidden">
           <Icon name="back" size={16} /> All groups
@@ -190,7 +246,7 @@ export function Library({ mode }: { mode: "all" | "favorites" | "lang" | "tag" |
         <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))]">
           {Array.from({ length: 6 }).map((_, i) => <div key={i} className="skeleton h-[210px] rounded-card border border-line" />)}
         </div>
-      ) : list.length === 0 ? (
+      ) : list.length === 0 && vaultMatches.length === 0 ? (
         <Empty q={q} hasAny={snippets.length > 0} group={group} onExisting={() => setAddExisting(true)} onNew={() => nav(group ? `/new?group=${encodeURIComponent(group)}` : "/new")}
           onExamples={async () => { await saveMany(seedSnippets()); toast("Examples added"); }} />
       ) : (
@@ -208,6 +264,17 @@ export function Library({ mode }: { mode: "all" | "favorites" | "lang" | "tag" |
               </div>
             </section>
           ))}
+          {vaultMatches.length > 0 && (
+            <section>
+              <h2 className="mb-3 flex items-center gap-2 text-[13px] font-bold uppercase tracking-[.1em] text-accent">
+                <Icon name="lock" size={15} /> In your vault
+                <span className="font-mono text-xs font-medium normal-case tracking-normal text-faint">{vaultMatches.length}</span>
+              </h2>
+              <div className={view === "grid" ? "grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))]" : "grid gap-2.5"}>
+                {vaultMatches.map((s, i) => <SnippetCard key={s.id} s={s} index={i} list={view === "list"} vault to={`/vault/${s.id}`} />)}
+              </div>
+            </section>
+          )}
         </div>
       )}
 

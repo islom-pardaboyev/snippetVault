@@ -31,6 +31,23 @@ const Ctx = createContext<SnippetsCtx | null>(null);
 const MAX_VERSIONS = 30;
 const gid = (name: string) => "g_" + encodeURIComponent(name).replace(/\./g, "%2E");
 
+/**
+ * Delete a snippet's sub-collections (its images and its version history). Firestore never
+ * cascades a document's sub-collections, so deleting the snippet document alone would leave
+ * both behind — the images as orphans and, worse, the version history as readable copies of
+ * code the user believes is gone.
+ */
+async function deleteSubcollections(uid: string, id: string): Promise<void> {
+  for (const name of ["images", "versions"] as const) {
+    const snap = await getDocs(collection(db, "users", uid, "snippets", id, name));
+    for (let i = 0; i < snap.docs.length; i += 400) {
+      const batch = writeBatch(db);
+      snap.docs.slice(i, i + 400).forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    }
+  }
+}
+
 
 export function SnippetsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
@@ -79,7 +96,7 @@ export function SnippetsProvider({ children }: { children: ReactNode }) {
         const v = d.data() as { name?: string } & GroupMeta;
         if (!v.name) return;
         names.push(v.name);
-        m[v.name] = { color: v.color, emoji: v.emoji };
+        m[v.name] = { color: v.color, emoji: v.emoji, share_token: v.share_token };
       });
       setExplicit(names);
       setMeta(m);
@@ -102,24 +119,24 @@ export function SnippetsProvider({ children }: { children: ReactNode }) {
   }, [uid, fail]);
 
   const remove = useCallback((id: string) => {
-    const hadImages = (snapshots.current.find((x) => x.id === id)?.image_count ?? 0) > 0;
     setSnippets((l) => l.filter((x) => x.id !== id));
     if (!uid) return;
     deleteDoc(doc(db, "users", uid, "snippets", id)).catch(fail);
-    if (hadImages) {
-      // wait out the Undo window, then remove the orphaned images
-      imgDelete.current.set(id, setTimeout(() => {
-        imgDelete.current.delete(id);
-        getDocs(collection(db, "users", uid, "snippets", id, "images")).then((snap) => {
-          const b = writeBatch(db);
-          snap.docs.forEach((d) => b.delete(d.ref));
-          return b.commit();
-        }).catch(fail);
-      }, 8000));
-    }
+    // Wait out the Undo window, then remove the orphaned sub-collections. If the snippet comes
+    // back (Undo / restore) `save` clears this timer and the images and history are kept.
+    const t = setTimeout(() => {
+      imgDelete.current.delete(id);
+      deleteSubcollections(uid, id).catch(fail);
+    }, 8000);
+    imgDelete.current.set(id, t);
   }, [uid, fail]);
 
   const saveMany = useCallback(async (list: Snippet[]) => {
+    // Restoring via Undo: cancel any pending sub-collection cleanup for these ids.
+    list.forEach((s) => {
+      const t = imgDelete.current.get(s.id);
+      if (t) { clearTimeout(t); imgDelete.current.delete(s.id); }
+    });
     setSnippets((l) => {
       const m = new Map(l.map((x) => [x.id, x]));
       list.forEach((s) => m.set(s.id, s));
@@ -189,6 +206,8 @@ export function SnippetsProvider({ children }: { children: ReactNode }) {
       ops.slice(i, i + 400).forEach((op) => op(batch));
       batch.commit().catch(fail);
     }
+    // Deleting the snippet documents is not enough: clear their images and version history too.
+    if (withSnippets) affected.forEach(({ id }) => { deleteSubcollections(uid, id).catch(fail); });
   }, [uid, fail]);
 
   const renameGroup = useCallback((from: string, to: string) => {
@@ -210,7 +229,7 @@ export function SnippetsProvider({ children }: { children: ReactNode }) {
   const saveVersion = useCallback((prev: Snippet) => {
     const v: Version = {
       vid: newId(), title: prev.title, language: prev.language, description: prev.description,
-      tags: prev.tags, code: prev.code, saved_at: new Date().toISOString(),
+      tags: prev.tags, code: prev.code, notes: prev.notes ?? "", saved_at: new Date().toISOString(),
     };
     if (!uid) return;
     const { vid, ...data } = v;

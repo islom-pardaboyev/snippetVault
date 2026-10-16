@@ -7,11 +7,15 @@ import {
 } from "firebase/auth";
 import { auth } from "../lib/firebase";
 import { wipeUserData } from "../lib/account";
+import { touchUserProfile } from "../lib/users";
+import { ADMIN_EMAIL, isAdminEmail } from "../lib/admin";
+
+// The admin email lives in `lib/admin.ts` (single source of truth, kept in step with
+// `firestore.rules` by a test). Re-exported here so existing importers keep working.
+export { ADMIN_EMAIL, isAdminEmail };
 
 /** Dev-only demo: `npm run dev` + `?demo` opens the app with seeded data and no Firebase account. Never in production builds. */
 export const DEMO = import.meta.env.DEV && typeof location !== "undefined" && new URLSearchParams(location.search).has("demo");
-export const ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL ?? "").trim().toLowerCase();
-export const isAdminEmail = (email?: string | null) => !!ADMIN_EMAIL && (email ?? "").toLowerCase() === ADMIN_EMAIL;
 
 interface AuthCtx {
   status: "loading" | "in" | "out";
@@ -36,7 +40,11 @@ const Ctx = createContext<AuthCtx | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);
-  useEffect(() => onAuthStateChanged(auth, (u) => { setUser(u); setReady(true); }), []);
+  useEffect(() => onAuthStateChanged(auth, (u) => {
+    setUser(u); setReady(true);
+    // Keep the admin's user directory fresh; a failed write must not break sign-in.
+    if (u && !DEMO) touchUserProfile(u).catch(() => undefined);
+  }), []);
 
   const signIn = useCallback(async (e: string, p: string) => { await signInWithEmailAndPassword(auth, e, p); }, []);
   const signUp = useCallback(async (e: string, p: string) => {

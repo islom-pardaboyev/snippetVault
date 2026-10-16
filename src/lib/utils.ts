@@ -1,17 +1,30 @@
 import type { Snippet } from "./types";
+import { MAX_NOTE_HTML, noteText, noteToHtml } from "./note";
+
+/**
+ * A "page" is a snippet whose content is rich text instead of code. It is chosen from the same
+ * language menu as everything else (it replaced the old catch-all "Other" entry), but when it is
+ * picked the code editor gives way to the full note editor, and the detail and share pages render
+ * the page instead of a code block. The content lives in `Snippet.notes`; `code` stays empty.
+ */
+export const PAGE_LANG = "Page";
 
 export const LANGUAGES = [
   "JavaScript", "TypeScript", "Python", "SQL", "Terminal", "Shell", "CSS", "HTML",
-  "JSON", "Go", "Rust", "Java", "C++", "PHP", "Markdown", "Other",
+  "JSON", "Go", "Rust", "Java", "C++", "PHP", "Markdown", "Page",
 ] as const;
 
 export const LANG_COLOR: Record<string, string> = {
   JavaScript: "#f7df1e", TypeScript: "#3b82f6", Python: "#5b9bd5", SQL: "#e38c00",
   Shell: "#4eaa25", Terminal: "#3ddc84", CSS: "#4d8bff", HTML: "#e34c26", JSON: "#b8bec7", Go: "#00add8",
-  Rust: "#dea584", Java: "#f89820", "C++": "#f34b7d", PHP: "#8892bf", Markdown: "#8b949e", Other: "#8c919b",
+  Rust: "#dea584", Java: "#f89820", "C++": "#f34b7d", PHP: "#8892bf", Markdown: "#8b949e",
+  Other: "#8c919b", Page: "#8c919b",
 };
 
 export const langColor = (l: string) => LANG_COLOR[l] ?? LANG_COLOR.Other;
+
+/** True when a language marks a page — rich text instead of code. */
+export const isPage = (lang: string) => lang === PAGE_LANG;
 
 export function timeAgo(iso: string): string {
   const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
@@ -50,7 +63,7 @@ export async function copyText(text: string): Promise<boolean> {
 
 const EXT: Record<string, string> = {
   JavaScript: "js", TypeScript: "ts", Python: "py", SQL: "sql", Terminal: "sh", Shell: "sh", CSS: "css", HTML: "html",
-  JSON: "json", Go: "go", Rust: "rs", Java: "java", "C++": "cpp", PHP: "php", Markdown: "md", Other: "txt",
+  JSON: "json", Go: "go", Rust: "rs", Java: "java", "C++": "cpp", PHP: "php", Markdown: "md", Other: "txt", Page: "txt",
 };
 
 export function downloadFile(name: string, content: string, type = "text/plain") {
@@ -65,9 +78,32 @@ export function downloadFile(name: string, content: string, type = "text/plain")
 export const snippetFilename = (s: Snippet) =>
   (s.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "snippet") + "." + (EXT[s.language] ?? "txt");
 
-export function toMarkdown(s: Snippet) {
+/** The minimal shape needed to render or copy a snippet (a page carries its text in `notes`). */
+export interface CodeLike { code: string; language: string; title: string; notes?: string; }
+
+export function toMarkdown(s: CodeLike) {
+  // A page has no code fence — its readable text is what gets copied.
+  if (isPage(s.language)) return noteText(s.notes).trim() || s.title;
   return "```" + s.language.toLowerCase() + "\n" + s.code + "\n```";
 }
+
+/** Escape text for safe use inside HTML. Matches the escaping in `lib/note.ts`. */
+export const escapeHtml = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
+/** A `<pre><code>` block, ready to paste into a blog or chat that takes HTML (a page keeps its HTML). */
+export function toHtml(s: CodeLike) {
+  if (isPage(s.language)) return noteToHtml(s.notes);
+  return `<pre><code class="language-${s.language.toLowerCase()}">${escapeHtml(s.code)}</code></pre>`;
+}
+
+/** The title followed by the code in markdown fences (or by the page's text). */
+export function titleAndCode(s: CodeLike) {
+  if (isPage(s.language)) return `${titleSlug(s, " ")}\n\n${noteText(s.notes).trim()}`;
+  return `${titleSlug(s, " ")}\n\n${toMarkdown(s)}`;
+}
+
+const titleSlug = (s: CodeLike, sep: string) => s.title.trim() || sep.trim() || "Untitled";
 
 /** Best-effort language guess for pasted code. */
 export function detectLanguage(code: string): string | null {
@@ -105,7 +141,7 @@ export function parseImport(text: string): Snippet[] {
     if (!r || typeof r !== "object") continue;
     const o = r as Record<string, unknown>;
     if (typeof o.title !== "string" || typeof o.code !== "string") continue;
-    out.push({
+    const snippet: Snippet = {
       id: typeof o.id === "string" && /^[\w-]{1,40}$/.test(o.id) ? o.id : newId(),
       title: o.title.slice(0, 200),
       code: o.code,
@@ -115,7 +151,9 @@ export function parseImport(text: string): Snippet[] {
       tags: Array.isArray(o.tags) ? o.tags.filter((t): t is string => typeof t === "string").slice(0, 30) : [],
       created_at: typeof o.created_at === "string" ? o.created_at : now,
       updated_at: typeof o.updated_at === "string" ? o.updated_at : now,
-    });
+    };
+    if (typeof o.notes === "string" && o.notes.trim()) snippet.notes = o.notes.slice(0, MAX_NOTE_HTML);
+    out.push(snippet);
   }
   return out;
 }
@@ -128,13 +166,13 @@ const GROUPS: Record<string, string> = {
 export function seedSnippets(): Snippet[] {
   const now = Date.now();
   const d = (n: number) => new Date(now - n * 86400000).toISOString();
-  const mk = (id: string, title: string, language: string, tags: string[], description: string, code: string, days: number, favorite = false): Snippet =>
-    ({ id, title, language, tags, description, code, favorite, group: GROUPS[id] ?? "", created_at: d(days), updated_at: d(days) });
+  const mk = (id: string, title: string, language: string, tags: string[], description: string, code: string, days: number, favorite = false, notes = "", share = ""): Snippet =>
+    ({ id, title, language, tags, description, code, favorite, group: GROUPS[id] ?? "", ...(notes ? { notes } : {}), ...(share ? { share_token: share } : {}), created_at: d(days), updated_at: d(days) });
   return [
     mk("s1", "Debounce function", "JavaScript", ["utils", "performance"], "Delay a function until after N milliseconds of silence. Great for search inputs.",
-      "function debounce(fn, ms) {\n  let timer;\n  return (...args) => {\n    clearTimeout(timer);\n    timer = setTimeout(() => fn(...args), ms);\n  };\n}", 2, true),
+      "function debounce(fn, ms) {\n  let timer;\n  return (...args) => {\n    clearTimeout(timer);\n    timer = setTimeout(() => fn(...args), ms);\n  };\n}", 2, true, "`timer` lives in a closure, so every debounce() call gets its own independent timer.\n\nTune ms to the input: ~200ms for local filtering, ~400ms before a network request.", "demoShareLink01"),
     mk("s2", "Typed fetch helper", "TypeScript", ["api", "utils"], "Generic JSON fetch that throws on non-2xx responses.",
-      "async function getJSON<T>(url: string): Promise<T> {\n  const res = await fetch(url);\n  if (!res.ok) throw new Error(`HTTP ${res.status}`);\n  return res.json() as Promise<T>;\n}", 5),
+      "async function getJSON<T>(url: string): Promise<T> {\n  const res = await fetch(url);\n  if (!res.ok) throw new Error(`HTTP ${res.status}`);\n  return res.json() as Promise<T>;\n}", 5, false, "Throws on non-2xx so callers can try/catch instead of checking res.ok at every call site.\nThe <T> parameter is only a cast — validate the shape if the API is untrusted."),
     mk("s3", "Read a CSV with pandas", "Python", ["data"], "Load a CSV, parse dates, and preview the first rows.",
       "import pandas as pd\n\ndf = pd.read_csv('sales.csv', parse_dates=['date'])\nprint(df.head())\nprint(df.describe())", 9),
     mk("s4", "Minimal Flask route", "Python", ["web", "api"], "The smallest possible JSON endpoint.",
@@ -151,6 +189,10 @@ export function seedSnippets(): Snippet[] {
       "<!DOCTYPE html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"utf-8\" />\n    <title>Page</title>\n  </head>\n  <body>\n    <header></header>\n    <main></main>\n    <footer></footer>\n  </body>\n</html>", 30),
     mk("s10", "useLocalStorage hook", "TypeScript", ["react", "hooks"], "State that persists in localStorage and survives reloads.",
       "function useLocalStorage<T>(key: string, initial: T) {\n  const [value, setValue] = useState<T>(() => {\n    const raw = localStorage.getItem(key);\n    return raw ? (JSON.parse(raw) as T) : initial;\n  });\n  useEffect(() => {\n    localStorage.setItem(key, JSON.stringify(value));\n  }, [key, value]);\n  return [value, setValue] as const;\n}", 4, true),
+    // A "Page" is prose, not code — its content lives in `notes`. Pick it from the language menu.
+    mk("s11", "Release notes — v2.0", "Page", ["notes", "release"], "A written page (not code): headings, lists and quotes all work.",
+      "", 0, false,
+      "<h1>Release notes — v2.0</h1><p>The vault update is here. A short summary of what changed and what to try first.</p><h2>Highlights</h2><ul><li><p><strong>Encrypted vault</strong> — AES-256-GCM, opened with your own passphrase.</p></li><li><p><strong>Rich notes</strong> — headings, checklists, quotes and images.</p></li><li><p><strong>Pages</strong> — write prose instead of code, and share it like any snippet.</p></li></ul><h2>How to try it</h2><ol><li><p>Pick <em>Page</em> from the language menu when you create a snippet.</p></li><li><p>Write freely — the code editor steps aside.</p></li><li><p>Share it; the page renders as a full page for anyone with the link.</p></li></ol><blockquote><p>Tip: the language menu still remembers older snippets that used <em>Other</em>.</p></blockquote>"),
   ];
 }
 

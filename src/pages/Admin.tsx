@@ -3,8 +3,10 @@ import { DEMO, isAdminEmail, useAuth } from "../hooks/auth";
 import { useSnippets } from "../hooks/snippets";
 import type { SyncState } from "../lib/types";
 import { exportJson } from "../lib/utils";
+import { listUsers, type UserProfile } from "../lib/users";
 import { projectId } from "../lib/firebase";
 import { Icon } from "../components/Icon";
+import { Avatar, accountName } from "../components/Avatar";
 
 const UNLOCK_KEY = "sv:admin-unlocked";
 const PASSCODE_HASH = __ADMIN_HASH__;
@@ -97,25 +99,105 @@ function Dashboard({ onLock }: { onLock(): void }) {
         ))}
       </div>
 
-      <div className="mt-6 grid gap-4 md:grid-cols-2">
-        <div className="rounded-card border border-line bg-surface p-5">
-          <h2 className="mb-1 font-bold">This browser</h2>
-          <p className="mb-4 text-sm text-muted">
-            {storage ? `${mb(storage.used)} stored by this app in this browser (offline cache included).` : "Storage estimate not available in this browser."}
-          </p>
-          <button className="btn" onClick={() => exportJson(snippets)}><Icon name="download" size={16} /> Export vault (JSON)</button>
-        </div>
+      <div className="mt-6 rounded-card border border-line bg-surface p-5">
+        <h2 className="mb-1 font-bold">This browser</h2>
+        <p className="mb-4 text-sm text-muted">
+          {storage ? `${mb(storage.used)} stored by this app in this browser (offline cache included).` : "Storage estimate not available in this browser."}
+        </p>
+        <button className="btn" onClick={() => exportJson(snippets)}><Icon name="download" size={16} /> Export vault (JSON)</button>
+      </div>
 
-        <div className="rounded-card border border-line bg-surface p-5">
-          <h2 className="mb-1 font-bold">Users</h2>
-          <p className="mb-4 text-sm text-muted">
-            The client can't list other accounts. The full user list lives in the Firebase console.
-          </p>
-          <a className="btn" target="_blank" rel="noreferrer" href={`https://console.firebase.google.com/project/${projectId}/authentication/users`}>
-            <Icon name="link" size={16} /> Open Firebase Authentication
+      <div className="mt-4 rounded-card border border-line bg-surface p-5">
+        <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-3">
+          <h2 className="font-bold">Users</h2>
+          <a className="btn ml-auto" target="_blank" rel="noreferrer" href={`https://console.firebase.google.com/project/${projectId}/authentication/users`}>
+            <Icon name="link" size={16} /> Firebase console
           </a>
         </div>
+        <p className="mb-4 text-sm text-muted">Every account that has opened SnippetVault, most recent activity first.</p>
+        <UsersTable />
       </div>
+    </div>
+  );
+}
+
+/** Demo-only rows so /admin?demo=1 shows the table without a Firebase project. */
+const DEMO_USERS: UserProfile[] = [
+  { uid: "demo-1", email: "demo@snippetvault.dev", displayName: "Demo User", photoURL: null, provider: "password", lastSeen: new Date().toISOString() },
+  { uid: "demo-2", email: "grace@example.com", displayName: "Grace Hopper", photoURL: null, provider: "google.com", lastSeen: new Date(Date.now() - 3 * 3600e3).toISOString() },
+  { uid: "demo-3", email: "ada@example.com", displayName: null, photoURL: null, provider: "password", lastSeen: new Date(Date.now() - 2 * 86400e3).toISOString() },
+];
+
+function relativeTime(iso: string | null) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  const secs = Math.round((Date.now() - d.getTime()) / 1000);
+  if (secs < 60) return "just now";
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function UsersTable() {
+  const [rows, setRows] = useState<UserProfile[] | null>(DEMO ? DEMO_USERS : null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (DEMO) return;
+    listUsers().then(setRows).catch(() => { setError("Couldn't load the user directory."); setRows([]); });
+  }, []);
+
+  if (rows === null) {
+    return <div className="grid gap-2">{[0, 1, 2].map((i) => <div key={i} className="skeleton h-11 rounded-[10px]" />)}</div>;
+  }
+  if (error) {
+    return (
+      <p className="rounded-[10px] border border-line bg-surface-2 px-3.5 py-3 text-sm text-muted">
+        {error} Deploy the updated Firestore rules so the admin can read it.
+      </p>
+    );
+  }
+  if (!rows.length) {
+    return <p className="rounded-[10px] border border-dashed border-line-strong px-3.5 py-3 text-sm text-muted">No accounts yet.</p>;
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[560px] border-collapse text-sm">
+        <thead>
+          <tr className="border-b border-line text-left text-[11px] font-bold uppercase tracking-[.1em] text-faint">
+            <th className="py-2.5 pr-4 font-bold">User</th>
+            <th className="py-2.5 pr-4 font-bold">Email</th>
+            <th className="py-2.5 pr-4 font-bold">Sign-in</th>
+            <th className="py-2.5 font-bold">Last seen</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((u) => {
+            const name = accountName(u.displayName, u.email);
+            return (
+              <tr key={u.uid} className="border-b border-line last:border-0">
+                <td className="py-2.5 pr-4">
+                  <div className="flex items-center gap-2.5">
+                    <Avatar src={u.photoURL} name={name} size={30} />
+                    <span className="font-semibold">{u.displayName || "—"}</span>
+                  </div>
+                </td>
+                <td className="py-2.5 pr-4 text-muted">{u.email ?? "—"}</td>
+                <td className="py-2.5 pr-4 text-muted">
+                  {u.provider === "google.com" ? "Google" : u.provider === "password" ? "Email & password" : u.provider ?? "—"}
+                </td>
+                <td className="py-2.5 text-muted">{relativeTime(u.lastSeen)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

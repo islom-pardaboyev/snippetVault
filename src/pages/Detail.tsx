@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { HistoryDialog } from "../components/HistoryDialog";
 import { useCopySnippet } from "../hooks/useCopy";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { useSnippets } from "../hooks/snippets";
 import { useToast } from "../hooks/ui";
 import { CodeBlock } from "../components/CodeBlock";
@@ -9,42 +9,59 @@ import { SnippetCard, StarButton } from "../components/SnippetCard";
 import { Icon } from "../components/Icon";
 import { NotFound } from "./NotFound";
 import { useModal } from "../components/Modal";
+import { useVault } from "../hooks/vault";
 import { useImageActions, useSnippetImages } from "../hooks/images";
 import { ImageGallery } from "../components/ImageGallery";
+import { NotesSection } from "../components/NotesSection";
+import { NoteView } from "../components/RichNote";
+import { ShareDialog } from "../components/ShareDialog";
+import { CopyMenu } from "../components/CopyMenu";
 import { RunPanel } from "../components/RunPanel";
 import { isRunnable } from "../lib/runner";
 import { MAX_IMAGES, compressFiles } from "../lib/images";
+import { dropNoteImage, hasNoteText, noteText } from "../lib/note";
 import { Select } from "../components/Select";
 import { LangIcon } from "../components/LangIcon";
-import { copyText, downloadFile, lineCount, newId, snippetFilename, timeAgo, toMarkdown } from "../lib/utils";
+import { copyText, downloadFile, isPage, lineCount, newId, snippetFilename, timeAgo, toMarkdown } from "../lib/utils";
 
 export function Detail() {
   const { id = "" } = useParams();
   const { get, loaded, snippets, save, remove, groups: groupNames, addGroup } = useSnippets();
   const nav = useNavigate();
   const toast = useToast();
-  const { prompt } = useModal();
+  const { prompt, confirm } = useModal();
+  const { available: vaultAvailable, status: vaultStatus, items: vaultItems, moveIn } = useVault();
   const s = get(id);
+  const page = isPage(s?.language ?? "");
   const [wrap, setWrap] = useState(false);
   const [history, setHistory] = useState(false);
+  const [share, setShare] = useState(false);
+  const [moving, setMoving] = useState(false);
   const copySnippet = useCopySnippet();
   const { images, loading: imagesLoading } = useSnippetImages(s ? s.id : null);
   const { add: addImage, remove: removeImage } = useImageActions();
   const [busy, setBusy] = useState(false);
+  /** Live count for the cap check — an async add must not read a stale `images`. */
+  const count = useRef(images.length);
+  count.current = images.length;
 
+  /** Add files to the snippet's gallery; returns the new image ids (empty when the cap is hit). */
   const addFiles = async (files: File[]) => {
-    if (!s || !files.length) return;
+    if (!s || !files.length) return [];
     setBusy(true);
-    const { ok, error } = await compressFiles(files, MAX_IMAGES - images.length);
-    ok.forEach((c) => addImage(s.id, c));
-    if (ok.length) save({ ...s, image_count: images.length + ok.length });
+    const { ok, error } = await compressFiles(files, MAX_IMAGES - count.current);
+    const ids = ok.map(() => newId());
+    ok.forEach((c, i) => addImage(s.id, c, ids[i]));
+    if (ok.length) save({ ...s, image_count: count.current + ok.length });
     setBusy(false);
     if (error) toast(error, { kind: "err" });
+    return ids;
   };
   const removeImg = (imgId: string) => {
     if (!s) return;
     removeImage(s.id, imgId);
-    save({ ...s, image_count: Math.max(0, images.length - 1) });
+    // If the note shows this picture, drop the reference with the picture itself.
+    save({ ...s, image_count: Math.max(0, images.length - 1), notes: dropNoteImage(s.notes, imgId) });
     toast("Image removed");
   };
 
@@ -58,24 +75,52 @@ export function Detail() {
     toast("Snippet deleted", { action: { label: "Undo", run: () => save(backup) }, ms: 6000 });
   };
 
-  useEffect(() => {
+  const toVault = async () => {
     if (!s) return;
+    if (!vaultAvailable) { toast("The Vault needs a real account — it isn't available in demo mode.", { kind: "err" }); return; }
+    if (vaultStatus !== "unlocked") { toast("Unlock your vault first"); nav("/vault"); return; }
+    const ok = await confirm({ title: "Move to the vault?", description: "This snippet and its images are encrypted and removed from your normal library. You can move it back out later.", confirmLabel: "Move to vault", icon: "lock" });
+    if (!ok) return;
+    setMoving(true);
+    try { await moveIn(s); toast("Moved to the vault"); nav("/vault"); }
+    catch { toast("Couldn't move it to the vault", { kind: "err" }); setMoving(false); }
+  };
+
+  // Keep the latest values for global shortcuts.
+  const shortcuts = useRef({ s, copy: copySnippet, save });
+  shortcuts.current = { s, copy: copySnippet, save };
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const { s: snip, copy, save: persist } = shortcuts.current;
+      if (!snip) return;
       const t = e.target as HTMLElement;
       if (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || e.metaKey || e.ctrlKey || e.altKey) return;
       const k = e.key.toLowerCase();
-      if (k === "c") copySnippet(s);
-      else if (k === "e") nav(`/s/${s.id}/edit`);
-      else if (k === "f") save({ ...s, favorite: !s.favorite });
-      else if (k === "r" && isRunnable(s.language)) window.dispatchEvent(new Event("sv:run"));
-      else if (k === "escape") nav(-1);
+      if (k === "c") copy(snip);
+      else if (k === "e") nav(`/s/${snip.id}/edit`);
+      else if (k === "f") persist({ ...snip, favorite: !snip.favorite });
+      else if (k === "r" && isRunnable(snip.language)) window.dispatchEvent(new Event("sv:run"));
+      else if (k === "escape" && !document.querySelector("dialog[open]")) nav(-1);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  });
+  }, [nav]);
 
+  if (moving) return <div className="skeleton mx-auto h-72 max-w-[1240px] rounded-card" />;
   if (!s) {
     if (!loaded) return <div className="skeleton mx-auto h-72 max-w-[1240px] rounded-card" />;
+    if (vaultItems.some((i) => i.id === id)) {
+      if (vaultStatus === "unlocked") return <Navigate to={`/vault/${id}`} replace />;
+      return (
+        <div className="anim-rise mx-auto max-w-[560px] rounded-card border border-line bg-surface p-8 text-center">
+          <Icon name="lock" size={34} className="mx-auto mb-3 text-accent" />
+          <h1 className="mb-2 text-2xl font-bold tracking-tight">This snippet is in your vault</h1>
+          <p className="mb-5 text-muted">Unlock the vault to open it.</p>
+          <button className="btn btn-primary" onClick={() => nav("/vault")}><Icon name="key" size={16} /> Open the vault</button>
+        </div>
+      );
+    }
     return <NotFound what="snippet" />;
   }
 
@@ -119,8 +164,10 @@ export function Detail() {
         </div>
         <div className="flex w-full flex-wrap gap-2 md:w-auto">
           <StarButton s={s} />
-          <button className="btn btn-primary flex-1 md:flex-none" onClick={() => copySnippet(s)}><Icon name="copy" size={16} /> Copy</button>
+          <CopyMenu snippet={s} onRawCopy={() => copySnippet(s)} className="flex-1 md:flex-none" />
           <button className="btn flex-1 md:flex-none" onClick={() => nav(`/s/${s.id}/edit`)}><Icon name="edit" size={16} /> Edit</button>
+          <button className="btn flex-1 md:flex-none" onClick={() => setShare(true)}><Icon name="link" size={16} /> Share</button>
+          {vaultAvailable && <button className="btn flex-1 md:flex-none" onClick={toVault}><Icon name="lock" size={16} /> Vault</button>}
           <button className="btn btn-icon" aria-label="Version history" title="Version history" onClick={() => setHistory(true)}><Icon name="clock" size={16} /></button>
           <button className="btn btn-icon" aria-label="Duplicate" title="Duplicate"
             onClick={() => { const n = { ...s, id: newId(), title: s.title + " (copy)", favorite: false, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }; save(n); nav(`/s/${n.id}`); toast("Duplicated"); }}>
@@ -132,18 +179,34 @@ export function Detail() {
 
       {s.description && <p className="mt-[18px] max-w-[70ch] text-base text-muted">{s.description}</p>}
 
-      <div className="mt-[22px]">
-        <CodeBlock code={s.code} lang={s.language} wrap={wrap} title={snippetFilename(s)}
-          actions={<>
-            <button className={`btn btn-ghost !h-7 !px-2 ${wrap ? "!text-ink" : ""}`} onClick={() => setWrap((w) => !w)} aria-pressed={wrap}><Icon name="wrap" size={15} /></button>
-            <button className="btn btn-ghost !h-7 !px-2" onClick={() => copy(toMarkdown(s), "Copied as Markdown!")}>Markdown</button>
-            <button className="btn btn-ghost !h-7 !px-2" onClick={() => downloadFile(snippetFilename(s), s.code)}><Icon name="download" size={15} /></button>
-          </>}
-        />
-      </div>
+      {page ? (
+        <div className="mt-[22px]">
+          {hasNoteText(s.notes) ? (
+            <article className="rounded-card border border-line bg-surface px-5 py-6 shadow-[0_18px_40px_-22px_rgba(0,0,0,.6)] sm:px-8 sm:py-8">
+              <NoteView html={s.notes} images={images} className="note-page" />
+            </article>
+          ) : (
+            <button className="w-full rounded-card border border-dashed border-line bg-transparent px-5 py-10 text-[14px] text-muted transition hover:border-line-strong hover:text-ink" onClick={() => nav(`/s/${s.id}/edit`)}>
+              <Icon name="edit" size={16} className="mr-1.5 inline align-[-2px]" /> This page is empty — add some content
+            </button>
+          )}
+        </div>
+      ) : (
+        <>
+          <div className="mt-[22px]">
+            <CodeBlock code={s.code} lang={s.language} wrap={wrap} title={snippetFilename(s)}
+              actions={<>
+                <button className={`btn btn-ghost !h-7 !px-2 ${wrap ? "!text-ink" : ""}`} onClick={() => setWrap((w) => !w)} aria-pressed={wrap}><Icon name="wrap" size={15} /></button>
+                <button className="btn btn-ghost !h-7 !px-2" onClick={() => copy(toMarkdown(s), "Copied as Markdown!")}>Markdown</button>
+                <button className="btn btn-ghost !h-7 !px-2" onClick={() => downloadFile(snippetFilename(s), s.code)}><Icon name="download" size={15} /></button>
+              </>}
+            />
+          </div>
 
-      {isRunnable(s.language) && (
-        <div className="mt-4"><RunPanel code={s.code} language={s.language} /></div>
+          {isRunnable(s.language) && (
+            <div className="mt-4"><RunPanel code={s.code} language={s.language} /></div>
+          )}
+        </>
       )}
 
       {(images.length > 0 || (s.image_count ?? 0) > 0 || imagesLoading) && (
@@ -160,10 +223,15 @@ export function Detail() {
         </div>
       )}
 
+      {!page && (
+        <NotesSection snippet={s} onSave={save} images={images}
+          onAddImage={async (file) => (await addFiles([file]))[0] ?? null} />
+      )}
+
       <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
         {[
-          [String(lineCount(s.code)), "lines"],
-          [String(s.code.length), "characters"],
+          page ? [String(noteText(s.notes).trim().split(/\s+/).filter(Boolean).length), "words"] : [String(lineCount(s.code)), "lines"],
+          page ? [String(noteText(s.notes).length), "characters"] : [String(s.code.length), "characters"],
           [new Date(s.created_at).toLocaleDateString(undefined, { dateStyle: "medium" }), "created"],
           [s.favorite ? "Yes" : "No", "favourite"],
         ].map(([v, l]) => (
@@ -182,6 +250,8 @@ export function Detail() {
         </>
       )}
       <HistoryDialog snippet={s} open={history} onClose={() => setHistory(false)} />
+      <ShareDialog open={share} onClose={() => setShare(false)} kind="snippet" title={s.title}
+        snippets={[s]} token={s.share_token} onToken={(t) => save({ ...s, share_token: t })} />
     </div>
   );
 }

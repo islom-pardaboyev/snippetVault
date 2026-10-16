@@ -4,6 +4,7 @@ import { useSnippets } from "../hooks/snippets";
 import { Icon } from "../components/Icon";
 import { LangIcon } from "../components/LangIcon";
 import { langColor, lineCount, timeAgo } from "../lib/utils";
+import { findDuplicateGroups } from "../lib/similar";
 
 export function Insights() {
   const { snippets } = useSnippets();
@@ -22,6 +23,8 @@ export function Insights() {
     const recent = [...snippets].sort((a, b) => +new Date(b.updated_at) - +new Date(a.updated_at)).slice(0, 6);
     return { langList, tagList, lines, recent, favs: snippets.filter((s) => s.favorite).length };
   }, [snippets]);
+
+  const dupes = useMemo(() => findDuplicateGroups(snippets), [snippets]);
 
   if (!snippets.length) {
     return (
@@ -88,6 +91,32 @@ export function Insights() {
           </section>
         </div>
       </div>
+
+      {dupes.length > 0 && (
+        <section className={`${tile} mt-4`}>
+          <div className="mb-1.5 flex items-center gap-2">
+            <Icon name="copy" size={16} className="text-[var(--t-kw)]" />
+            <h2 className="text-[15px] font-bold">Possible duplicates</h2>
+            <span className="font-mono text-xs text-faint">{dupes.length}</span>
+          </div>
+          <p className="mb-4 text-[13px] text-muted">
+            These look like the same code saved more than once. Open one and delete the extras if you like.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {dupes.slice(0, 6).map((g) => (
+              <div key={g.id} className="rounded-xl border border-line bg-surface-2 p-1.5">
+                {g.items.map((s) => (
+                  <Link key={s.id} to={`/s/${s.id}`} className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 hover:bg-surface-3">
+                    <LangIcon lang={s.language} size={16} />
+                    <span className="min-w-0 flex-1 truncate font-medium">{s.title}</span>
+                    <span className="shrink-0 text-xs text-faint">{timeAgo(s.updated_at)}</span>
+                  </Link>
+                ))}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

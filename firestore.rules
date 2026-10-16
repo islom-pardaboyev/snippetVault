@@ -4,6 +4,24 @@ rules_version = '2';
 // Snippets live at users/{uid}/snippets/{snippetId}.
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+    // Only the verified admin email may read the user directory (used by /admin).
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email == 'ipardaboyev574@gmail.com';
+    }
+
+    // Public directory: each account owns its own row; the admin can read every row.
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create, update: if isOwner(uid)
+        && request.resource.data.email is string && request.resource.data.email.size() <= 320;
+      allow delete: if isOwner(uid);
+    }
+
     match /users/{uid}/groups/{groupId} {
       allow read, delete: if request.auth != null && request.auth.uid == uid;
       allow create, update: if request.auth != null && request.auth.uid == uid
@@ -20,7 +38,9 @@ service cloud.firestore {
     match /users/{uid}/snippets/{snippetId}/versions/{versionId} {
       allow read, delete: if request.auth != null && request.auth.uid == uid;
       allow create, update: if request.auth != null && request.auth.uid == uid
-        && request.resource.data.code is string && request.resource.data.code.size() <= 200000;
+        && request.resource.data.code is string && request.resource.data.code.size() <= 200000
+        // A page's content rides along in `notes`, so cap it too (same headroom as the snippet).
+        && (!('notes' in request.resource.data) || (request.resource.data.notes is string && request.resource.data.notes.size() <= 200000));
     }
 
     match /users/{uid}/snippets/{snippetId} {
@@ -28,7 +48,123 @@ service cloud.firestore {
       allow create, update: if request.auth != null && request.auth.uid == uid
         && request.resource.data.title is string && request.resource.data.title.size() <= 200
         && request.resource.data.code is string && request.resource.data.code.size() <= 200000
-        && request.resource.data.tags is list && request.resource.data.tags.size() <= 30;
+        && request.resource.data.tags is list && request.resource.data.tags.size() <= 30
+        // Notes are rich text now (headings, lists, highlighted code), so the cap has the same
+        // headroom as `code` above: the editor itself limits the plain text to 20k characters.
+        && (!('notes' in request.resource.data) || (request.resource.data.notes is string && request.resource.data.notes.size() <= 200000));
+    }
+
+    // Private Vault. The payloads are AES-GCM ciphertext, so the rules only ever
+    // check the shape and size — never the (unreadable) contents.
+    //   users/{uid}/meta/vault                             → KDF params + wrapped data key
+    //   users/{uid}/vault/{itemId}                         → an encrypted snippet
+    //   users/{uid}/vault/{itemId}/images/{imageId}        → an encrypted image
+    match /users/{uid}/meta/{docId} {
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.wrapped_dek is string && request.resource.data.wrapped_dek.size() <= 4000;
+    }
+
+    // A vault image is either sealed inline (`enc`) or a pointer to the ciphertext hosted
+    // on imgbb (`remote`) — never both, so a hosted image is ~300 bytes instead of ~700 KB.
+    // Only the shape/size is checkable; the bytes are unreadable either way.
+    match /users/{uid}/vault/{itemId}/images/{imageId} {
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && (
+          (
+            'enc' in request.resource.data
+            && request.resource.data.enc.iv is string && request.resource.data.enc.iv.size() <= 64
+            && request.resource.data.enc.ct is string && request.resource.data.enc.ct.size() <= 950000
+          ) || (
+            'remote' in request.resource.data
+            && request.resource.data.remote.url is string
+            && request.resource.data.remote.url.matches('^https://.*')
+            && request.resource.data.remote.url.size() <= 600
+            && request.resource.data.remote.iv is string && request.resource.data.remote.iv.size() <= 64
+            && request.resource.data.remote.sha is string && request.resource.data.remote.sha.size() <= 64
+            && request.resource.data.remote.bytes is int
+            && request.resource.data.remote.bytes > 0
+            && request.resource.data.remote.bytes <= 4000000
+            && (!('delete_url' in request.resource.data.remote)
+                || request.resource.data.remote.delete_url == null
+                || (request.resource.data.remote.delete_url is string
+                    && request.resource.data.remote.delete_url.size() <= 600))
+          )
+        );
+    }
+
+    match /users/{uid}/vault/{itemId} {
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.enc.iv is string && request.resource.data.enc.iv.size() <= 64
+        && request.resource.data.enc.ct is string && request.resource.data.enc.ct.size() <= 900000;
+    }
+
+    // Read-only share links. Anyone with the (unguessable) token can read;
+    // only the owner can create the link or revoke it.
+    //
+    // Expiry is enforced here, not just in the app: a share stores `expires_at_ts`
+    // (a Firestore timestamp — a far-future one when the link never expires), and once
+    // the server clock passes it the document can no longer be read at all, so an expired
+    // link leaks nothing even if someone keeps the URL. A share written before this field
+    // existed has none, which readers below treat as the same far-future default.
+    match /shares/{token} {
+      function ownsShare() {
+        return request.auth != null
+          && get(/databases/$(database)/documents/shares/$(token)).data.owner_id == request.auth.uid;
+      }
+      // `resource == null` lets a read of a missing share succeed with "not found"
+      // instead of failing closed with permission-denied. A missing `expires_at_ts`
+      // defaults to a far-future date, i.e. "never expires".
+      function shareOpen() {
+        return resource == null
+          || request.time < resource.data.get('expires_at_ts', timestamp.date(9999, 12, 31));
+      }
+      function isOwnerOfToken() {
+        return request.auth != null && resource != null
+          && resource.data.owner_id == request.auth.uid;
+      }
+      // The same check for the sub-collections, which look the parent up by token.
+      function parentOpen() {
+        let parent = get(/databases/$(database)/documents/shares/$(token));
+        return parent == null
+          || request.time < parent.data.get('expires_at_ts', timestamp.date(9999, 12, 31));
+      }
+
+      allow read: if shareOpen() || isOwnerOfToken();
+      allow create: if request.auth != null
+        && request.resource.data.owner_id == request.auth.uid
+        && request.resource.data.kind in ['snippet', 'group']
+        && request.resource.data.title is string && request.resource.data.title.size() <= 200
+        && (!('owner_name' in request.resource.data)
+            || (request.resource.data.owner_name is string && request.resource.data.owner_name.size() <= 320))
+        && (!('group' in request.resource.data)
+            || (request.resource.data.group is string && request.resource.data.group.size() <= 100));
+      allow delete: if request.auth != null && resource.data.owner_id == request.auth.uid;
+      // The owner can change anything; anyone else may only bump the view counter by one.
+      allow update: if (request.auth != null && resource.data.owner_id == request.auth.uid)
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views'])
+            && request.resource.data.views is int
+            && request.resource.data.views == resource.data.get('views', 0) + 1);
+
+      match /snippets/{snippetId} {
+        allow read: if parentOpen() || ownsShare();
+        allow create, update: if ownsShare()
+          && request.resource.data.code is string && request.resource.data.code.size() <= 200000
+          // A page's content rides along in `notes`, so cap it here too.
+          && (!('notes' in request.resource.data)
+              || (request.resource.data.notes is string && request.resource.data.notes.size() <= 200000));
+        allow delete: if ownsShare();
+
+        match /images/{imageId} {
+          allow read: if parentOpen() || ownsShare();
+          allow create, update: if ownsShare()
+            && request.resource.data.data is string && request.resource.data.data.size() <= 900000
+            && request.resource.data.data.matches('^data:image/.*');
+          allow delete: if ownsShare();
+        }
+      }
     }
   }
 }

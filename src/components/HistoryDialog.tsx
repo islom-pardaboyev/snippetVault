@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "./Icon";
 import { CodeLines } from "./CodeBlock";
+import { NoteView } from "./RichNote";
 import { useSnippets } from "../hooks/snippets";
+import { useSnippetImages } from "../hooks/images";
 import { useToast } from "../hooks/ui";
-import { diffStats, timeAgo } from "../lib/utils";
+import { diffStats, isPage, timeAgo } from "../lib/utils";
+import { noteText } from "../lib/note";
 import type { Snippet, Version } from "../lib/types";
 
 export function HistoryDialog({ snippet, open, onClose }: { snippet: Snippet; open: boolean; onClose(): void }) {
@@ -12,6 +15,10 @@ export function HistoryDialog({ snippet, open, onClose }: { snippet: Snippet; op
   const toast = useToast();
   const [versions, setVersions] = useState<Version[] | null>(null);
   const [sel, setSel] = useState(0);
+  const page = isPage(snippet.language);
+  const { images } = useSnippetImages(snippet.id);
+  /** What changed between versions is the code for a snippet, the written text for a page. */
+  const textOf = (code: string, notes?: string) => (page ? noteText(notes) : code);
 
   useEffect(() => {
     const d = ref.current;
@@ -28,7 +35,7 @@ export function HistoryDialog({ snippet, open, onClose }: { snippet: Snippet; op
   const restore = () => {
     if (!v) return;
     saveVersion(snippet); // keep the current text in history too
-    save({ ...snippet, title: v.title, language: v.language, description: v.description, tags: v.tags, code: v.code, updated_at: new Date().toISOString() });
+    save({ ...snippet, title: v.title, language: v.language, description: v.description, tags: v.tags, code: v.code, notes: v.notes ?? "", updated_at: new Date().toISOString() });
     toast("Version restored");
     onClose();
   };
@@ -58,7 +65,7 @@ export function HistoryDialog({ snippet, open, onClose }: { snippet: Snippet; op
         <div className="grid min-h-0 flex-1 md:grid-cols-[260px_1fr]">
           <ul className="max-h-[200px] overflow-y-auto border-b border-line p-2 md:max-h-none md:border-b-0 md:border-r">
             {versions.map((x, i) => {
-              const d = diffStats(x.code, snippet.code);
+              const d = diffStats(textOf(x.code, x.notes), textOf(snippet.code, snippet.notes));
               return (
                 <li key={x.vid}>
                   <button onClick={() => setSel(i)}
@@ -77,11 +84,13 @@ export function HistoryDialog({ snippet, open, onClose }: { snippet: Snippet; op
           <div className="flex min-h-0 flex-col">
             <div className="flex items-center gap-3 border-b border-line px-4 py-2.5 text-[13px] text-muted">
               <span>Saved {new Date(v!.saved_at).toLocaleString()}</span>
-              <span className="text-faint">vs. current: <b className="font-mono text-[var(--t-str)]">+{diffStats(v!.code, snippet.code).added}</b> / <b className="font-mono text-danger">−{diffStats(v!.code, snippet.code).removed}</b> lines</span>
+              <span className="text-faint">vs. current: <b className="font-mono text-[var(--t-str)]">+{diffStats(textOf(v!.code, v!.notes), textOf(snippet.code, snippet.notes)).added}</b> / <b className="font-mono text-danger">−{diffStats(textOf(v!.code, v!.notes), textOf(snippet.code, snippet.notes)).removed}</b> lines</span>
               <button className="btn btn-primary ml-auto !h-8" onClick={restore}><Icon name="refresh" size={15} /> Restore</button>
             </div>
             <div className="min-h-0 flex-1 overflow-auto bg-bg">
-              <CodeLines code={v!.code} lang={v!.language} />
+              {page
+                ? <div className="p-5"><NoteView html={v!.notes ?? ""} images={images} className="note-page" /></div>
+                : <CodeLines code={v!.code} lang={v!.language} />}
             </div>
           </div>
         </div>

@@ -73,3 +73,21 @@ export async function compressFiles(files: File[], slots: number): Promise<{ ok:
   if (images.length > slots) error = `Only ${MAX_IMAGES} images per snippet — extras were skipped.`;
   return { ok, error };
 }
+
+/**
+ * Compress every image in `files` with **no count cap** — the Vault is the one place that
+ * accepts unlimited images (they are encrypted and hosted off-Firestore, see `sealForVault`).
+ * Same per-image size ceiling as everywhere else, so nothing can outgrow a document if it has
+ * to fall back to inline storage.
+ */
+export async function compressAll(files: File[]): Promise<{ ok: Compressed[]; error?: string }> {
+  const ok: Compressed[] = [];
+  let error: string | undefined;
+  const images = files.filter((f) => f.type.startsWith("image/"));
+  if (files.length && !images.length) return { ok, error: "That isn't an image file." };
+  for (const f of images) {
+    try { ok.push(await compressImage(f)); }
+    catch { error = "Couldn't read one of the images (HEIC or very large?)."; }
+  }
+  return { ok, error };
+}

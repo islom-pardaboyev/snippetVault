@@ -10,14 +10,17 @@ interface Props {
   onRemove?(id: string): void;
   busy?: boolean;
   hint?: string;
+  /** Highest image count allowed. The Vault passes `Infinity` — that's the one unlimited place. */
+  max?: number;
 }
 
 /** Thumbnail strip with add (button / drag-drop) and a click-to-enlarge lightbox. */
-export function ImageGallery({ images, onAdd, onRemove, busy, hint }: Props) {
+export function ImageGallery({ images, onAdd, onRemove, busy, hint, max = MAX_IMAGES }: Props) {
   const file = useRef<HTMLInputElement>(null);
   const dlg = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState<number | null>(null);
   const [over, setOver] = useState(false);
+  const unlimited = max === Infinity;
 
   useEffect(() => {
     const d = dlg.current;
@@ -38,7 +41,7 @@ export function ImageGallery({ images, onAdd, onRemove, busy, hint }: Props) {
 
   useEffect(() => { if (open !== null && open >= images.length) setOpen(images.length ? images.length - 1 : null); }, [images.length, open]);
 
-  const canAdd = !!onAdd && images.length < MAX_IMAGES;
+  const canAdd = !!onAdd && (unlimited || images.length < max);
   const cur = open !== null ? images[open] : undefined;
 
   return (
@@ -75,9 +78,11 @@ export function ImageGallery({ images, onAdd, onRemove, busy, hint }: Props) {
           onChange={(e) => { onAdd?.([...(e.target.files ?? [])]); e.target.value = ""; }} />
       </div>
       <p className="mt-2.5 text-xs text-faint">
-        {hint ?? (canAdd
-          ? `${images.length}/${MAX_IMAGES} · drop, pick or paste (⌘V) a screenshot — it's resized & stored with the snippet.`
-          : `${images.length}/${MAX_IMAGES} images`)}
+        {hint ?? (unlimited
+          ? `${images.length} image${images.length === 1 ? "" : "s"} · drop, pick or paste (⌘V) — encrypted here before it's stored.`
+          : canAdd
+            ? `${images.length}/${max} · drop, pick or paste (⌘V) a screenshot — it's resized & stored with the snippet.`
+            : `${images.length}/${max} images`)}
       </p>
 
       <dialog ref={dlg} onClose={() => setOpen(null)} onClick={(e) => { if (e.target === dlg.current) setOpen(null); }}

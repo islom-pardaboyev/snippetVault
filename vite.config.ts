@@ -15,8 +15,21 @@ function passcodeHash(mode: string): string {
   return /^[0-9a-f]{64}$/i.test(raw) ? raw.toLowerCase() : createHash("sha256").update(raw).digest("hex");
 }
 
+/**
+ * imgbb API key for the Vault's hosted (encrypted) images. Unlike the admin passcode this is a
+ * **plain secret** — the site is client-only, so the key is embedded in the JavaScript bundle and
+ * anyone can read it. Use a key you can rotate, and treat its quota as yours.
+ */
+function imgbbKey(mode: string): string {
+  const env = loadEnv(mode, process.cwd(), "");
+  return (env.IMB_API || env.VITE_IMGBB_KEY || "").trim();
+}
+
 export default defineConfig(({ mode }) => ({
-  define: { __ADMIN_HASH__: JSON.stringify(passcodeHash(mode)) },
+  define: {
+    __ADMIN_HASH__: JSON.stringify(passcodeHash(mode)),
+    __IMGBB_KEY__: JSON.stringify(imgbbKey(mode)),
+  },
   plugins: [
     react(),
     tailwindcss(),

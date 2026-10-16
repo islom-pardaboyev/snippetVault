@@ -3,12 +3,13 @@ import { Link } from "react-router-dom";
 import { useSnippets } from "../hooks/snippets";
 import { useToast } from "../hooks/ui";
 import { useNewGroup } from "../components/NewGroupDialog";
+import { ShareDialog } from "../components/ShareDialog";
 import { Icon } from "../components/Icon";
 import { LangIcon } from "../components/LangIcon";
 import { timeAgo } from "../lib/utils";
 
 export function Groups() {
-  const { groups, groupMeta, snippets, deleteGroups } = useSnippets();
+  const { groups, groupMeta, snippets, deleteGroups, updateGroup } = useSnippets();
   const [create, newGroupDialog] = useNewGroup();
   const toast = useToast();
   const [selecting, setSelecting] = useState(false);
@@ -16,6 +17,7 @@ export function Groups() {
   const [confirm, setConfirm] = useState(false);
   const dlg = useRef<HTMLDialogElement>(null);
   const [withSnippets, setWithSnippets] = useState(false);
+  const [shareGroup, setShareGroup] = useState<string | null>(null);
 
   const rows = useMemo(() => groups.map((g) => {
     const items = snippets.filter((s) => s.group === g);
@@ -105,10 +107,16 @@ export function Groups() {
                     <h3 className="truncate text-[16.5px] font-bold tracking-tight">{r.name}</h3>
                     <p className="text-[13px] text-muted">{r.count} snippet{r.count === 1 ? "" : "s"}{r.last && ` · ${timeAgo(r.last)}`}</p>
                   </div>
-                  {selecting && (
+                  {selecting ? (
                     <span className={`grid size-6 shrink-0 place-items-center rounded-md border-2 ${on ? "border-accent bg-accent text-accent-ink" : "border-line-strong"}`}>
                       {on && <Icon name="check" size={15} />}
                     </span>
+                  ) : (
+                    <button type="button" aria-label={`Share ${r.name}`} title="Share group as a read-only link"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShareGroup(r.name); }}
+                      className="grid size-8 shrink-0 place-items-center rounded-lg border border-line bg-surface text-muted transition hover:border-line-strong hover:text-ink">
+                      <Icon name="link" size={15} />
+                    </button>
                   )}
                 </div>
                 <div className="mt-4 flex min-h-[22px] items-center gap-1.5">
@@ -165,6 +173,17 @@ export function Groups() {
           </div>
         </div>
       </dialog>
+
+      <ShareDialog
+        open={!!shareGroup}
+        onClose={() => setShareGroup(null)}
+        kind="group"
+        title={shareGroup ?? ""}
+        group={shareGroup ?? undefined}
+        snippets={shareGroup ? snippets.filter((s) => s.group === shareGroup) : []}
+        token={shareGroup ? groupMeta[shareGroup]?.share_token : undefined}
+        onToken={(t) => { if (shareGroup) updateGroup(shareGroup, { share_token: t }); }}
+      />
     </div>
   );
 }

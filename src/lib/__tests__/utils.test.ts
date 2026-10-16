@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectLanguage, diffStats, fillTemplate, lineCount, parseImport, parseTags, templateVars } from "../utils";
+import { PAGE_LANG, detectLanguage, diffStats, fillTemplate, isPage, lineCount, parseImport, parseTags, templateVars, titleAndCode, toHtml, toMarkdown } from "../utils";
 import { inkFor, isHex } from "../color";
 
 describe("parseTags", () => {
@@ -53,6 +53,29 @@ describe("parseImport", () => {
     expect(s.language).toBe("Other");
     expect(s.favorite).toBe(false);
     expect(s.tags).toEqual([]);
+  });
+});
+
+describe("pages", () => {
+  const page = { title: "Release notes", language: PAGE_LANG, code: "", notes: "<h1>Hi</h1><p>Body text</p>" };
+  it("isPage only matches the Page language (and leaves the legacy Other alone)", () => {
+    expect(isPage("Page")).toBe(true);
+    expect(isPage("Other")).toBe(false);
+    expect(isPage("JavaScript")).toBe(false);
+  });
+  it("copies a page as its readable text, not a code fence", () => {
+    expect(toMarkdown(page)).toBe("Hi\nBody text");
+    expect(toMarkdown({ title: "T", language: "JavaScript", code: "let x = 1" })).toBe("```javascript\nlet x = 1\n```");
+  });
+  it("keeps a page's HTML for the HTML copy", () => {
+    expect(toHtml(page)).toBe("<h1>Hi</h1><p>Body text</p>");
+    expect(toHtml({ title: "T", language: "JSON", code: '{"a":1}' })).toBe('<pre><code class="language-json">{&quot;a&quot;:1}</code></pre>');
+  });
+  it("title + page joins the title with the page text", () => {
+    expect(titleAndCode(page)).toBe("Release notes\n\nHi\nBody text");
+  });
+  it("falls back to the title when a page has no text yet", () => {
+    expect(toMarkdown({ title: "Empty", language: PAGE_LANG, code: "" })).toBe("Empty");
   });
 });
 

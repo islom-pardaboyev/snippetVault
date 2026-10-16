@@ -78,12 +78,31 @@
 
 /* ---- motion ---- */
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+@keyframes rise-up { from { transform: translateY(100%); } }
+@keyframes fade { from { opacity: 0; } }
 @keyframes pop { from { opacity: 0; transform: translateY(12px) scale(.97); } }
 @keyframes shimmer { to { background-position: -150% 0; } }
 @keyframes grow { to { width: var(--w); } }
 @keyframes blink { 50% { opacity: 0; } }
 @keyframes pulse-dot { 50% { opacity: .35; } }
 .anim-rise { animation: rise .4s var(--ease-out-expo) both; }
+.anim-sheet { animation: rise-up .3s var(--ease-out-expo) both; }
+.anim-fade { animation: fade .2s ease both; }
+@keyframes shake {
+  10%, 90% { transform: translateX(-1px); }
+  20%, 80% { transform: translateX(2px); }
+  30%, 50%, 70% { transform: translateX(-4px); }
+  40%, 60% { transform: translateX(4px); }
+}
+.anim-shake { animation: shake .4s ease both; }
+/* Passcode keypad keys: they replace the native keyboard, so kill the grey tap flash,
+   text selection and the 300 ms double-tap-zoom delay on touch. */
+.keypad-key {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}
 .skeleton {
   background: linear-gradient(100deg, var(--surface) 30%, var(--surface-2) 50%, var(--surface) 70%) 0 0 / 300% 100%;
   animation: shimmer 1.4s infinite linear;
@@ -109,3 +128,91 @@ dialog[open] { animation: pop .28s var(--ease-out-expo); }
   .chip-on { @apply border-accent bg-accent text-accent-ink hover:text-accent-ink; }
   .link-btn { @apply border-0 bg-transparent p-0 text-[13px] text-muted underline underline-offset-[3px] hover:text-ink; }
 }
+
+/* ---- rich notes (Tiptap) ----
+   The editor and the read-only view share `.note-prose`, and the syntax colours come from the
+   same `--t-*` tokens as the snippet viewer — so a code block inside a note looks like the code
+   block right next to it. */
+.note-prose { outline: none; color: var(--text); font-size: 14.5px; line-height: 1.6; overflow-wrap: break-word; }
+.note-prose > :first-child { margin-top: 0; }
+.note-prose > :last-child { margin-bottom: 0; }
+.note-prose p { margin: .55em 0; }
+.note-prose h1, .note-prose h2, .note-prose h3 { margin: 1em 0 .4em; font-weight: 700; letter-spacing: -.01em; line-height: 1.25; }
+.note-prose h1 { font-size: 1.5em; }
+.note-prose h2 { font-size: 1.25em; }
+.note-prose h3 { font-size: 1.08em; }
+.note-prose ul, .note-prose ol { margin: .55em 0; padding-left: 1.35em; }
+.note-prose ul { list-style: disc; }
+.note-prose ol { list-style: decimal; }
+/* Check lists: Tiptap's TaskItem renders `li > label(checkbox) + div(content)`, so the marker
+   is gone and the row becomes a flex line that lines up however long the item is. */
+.note-prose ul[data-type="taskList"] { list-style: none; padding-left: 0; }
+.note-prose ul[data-type="taskList"] li { display: flex; align-items: flex-start; gap: .5em; }
+.note-prose ul[data-type="taskList"] li > label { flex: 0 0 auto; margin-top: .25em; line-height: 0; }
+.note-prose ul[data-type="taskList"] li > div { flex: 1 1 auto; min-width: 0; }
+.note-prose ul[data-type="taskList"] li > div > p { margin: 0; }
+.note-prose ul[data-type="taskList"] input[type="checkbox"] {
+  width: 15px; height: 15px; margin: 0; accent-color: var(--accent); cursor: pointer;
+}
+.note-prose ul[data-type="taskList"] li[data-checked="true"] > div { color: var(--muted); text-decoration: line-through; }
+.note-prose li { margin: .2em 0; }
+.note-prose li > p { margin: 0; }
+.note-prose blockquote { margin: .7em 0; border-left: 3px solid var(--line-strong); padding-left: .85em; color: var(--muted); }
+.note-prose hr { margin: 1.1em 0; border: 0; border-top: 1px solid var(--line); }
+.note-prose a { color: var(--t-prop); text-decoration: underline; text-underline-offset: 2px; }
+.note-prose strong { font-weight: 700; }
+.note-prose s { color: var(--muted); }
+.note-prose code {
+  border: 1px solid var(--line); border-radius: 5px; background: var(--surface-3);
+  padding: .08em .34em; font-family: var(--font-mono); font-size: .88em;
+}
+.note-prose pre {
+  margin: .7em 0; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--bg);
+  padding: .75em 1em; overflow-x: auto; font-family: var(--font-mono);
+  font-size: 13px; line-height: 1.7; tab-size: 2; white-space: pre;
+}
+.note-prose pre code { border: 0; border-radius: 0; background: none; padding: 0; font-size: 1em; color: var(--text); }
+
+/* Images in a note. The reference is resolved to one of the snippet's own images by the node
+   view, so these styles hold for both the editor and every read-only view. */
+.note-prose .note-img { margin: .75em 0; }
+.note-prose .note-img img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line-strong); border-radius: 12px; }
+.note-prose .note-img-missing {
+  display: inline-flex; align-items: center; gap: 6px; border: 1px dashed var(--line-strong);
+  border-radius: 10px; padding: 7px 10px; font-size: 12.5px; color: var(--muted);
+}
+.note-prose.note-edit .note-img { cursor: grab; }
+.note-prose .note-img.ProseMirror-selectednode img,
+.note-prose .note-img.ProseMirror-selectednode.note-img-gone {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+
+/* The writing surface: taller than one line, and a placeholder where a note is empty. */
+.note-prose.note-edit { min-height: 138px; padding: 12px 14px; }
+/* A page is the whole snippet, so its writing surface is much taller. */
+.note-prose.note-edit-page { min-height: 420px; }
+.note-prose p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder); float: left; height: 0; color: var(--faint); pointer-events: none;
+}
+/* The read-only page on the detail and share screens reads like a real page, not a note.
+   `NoteView` puts `note-page` on the wrapper, with `.note-prose` on the content inside it. */
+.note-page .note-prose { font-size: 16px; line-height: 1.75; }
+.note-page .note-prose h1 { font-size: 1.9em; }
+.note-page .note-prose h2 { font-size: 1.45em; }
+.note-page .note-prose h3 { font-size: 1.2em; }
+.note-page .note-prose p { margin: .7em 0; }
+
+/* highlight.js tokens, mapped onto the app's palette rather than a foreign theme. */
+.note-prose .hljs-comment, .note-prose .hljs-quote { color: var(--t-com); font-style: italic; }
+.note-prose .hljs-keyword, .note-prose .hljs-doctag, .note-prose .hljs-meta, .note-prose .hljs-literal,
+.note-prose .hljs-selector-tag, .note-prose .hljs-operator { color: var(--t-kw); }
+.note-prose .hljs-string, .note-prose .hljs-regexp, .note-prose .hljs-symbol, .note-prose .hljs-bullet,
+.note-prose .hljs-template-tag, .note-prose .hljs-addition { color: var(--t-str); }
+.note-prose .hljs-number, .note-prose .hljs-attr, .note-prose .hljs-attribute, .note-prose .hljs-variable,
+.note-prose .hljs-template-variable { color: var(--t-num); }
+.note-prose .hljs-title, .note-prose .hljs-function, .note-prose .hljs-section,
+.note-prose .hljs-selector-id, .note-prose .hljs-selector-class { color: var(--t-fn); }
+.note-prose .hljs-property, .note-prose .hljs-selector-attr { color: var(--t-prop); }
+.note-prose .hljs-type, .note-prose .hljs-built_in, .note-prose .hljs-params, .note-prose .hljs-class { color: var(--t-type); }
+.note-prose .hljs-tag, .note-prose .hljs-name, .note-prose .hljs-attr-name,
+.note-prose .hljs-deletion { color: var(--t-tag); }

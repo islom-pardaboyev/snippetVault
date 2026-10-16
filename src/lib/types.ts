@@ -7,16 +7,20 @@ export interface Snippet {
   image_count?: number;
   tags: string[];
   description: string;
+  /** Optional private note: an explanation of the snippet, just for the owner. */
+  notes?: string;
   code: string;
   created_at: string;
   updated_at: string;
+  /** Token of a read-only share link for this snippet, if one was created. */
+  share_token?: string;
 }
 
 export type SyncState = "synced" | "syncing" | "offline";
 export type ThemeMode = "system" | "dark" | "light";
 export type Accent = "lime" | "sky" | "blue" | "violet" | "pink" | "coral" | "red" | "amber" | "green" | "cyan" | "custom";
 
-export interface GroupMeta { color?: string; emoji?: string; }
+export interface GroupMeta { color?: string; emoji?: string; share_token?: string; }
 
 export interface Version {
   vid: string;
@@ -25,6 +29,8 @@ export interface Version {
   description: string;
   tags: string[];
   code: string;
+  /** A page keeps its content in `notes`; stored here too so page edits can be restored. */
+  notes?: string;
   saved_at: string;
 }
 

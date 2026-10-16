@@ -3,14 +3,17 @@ import { NavLink, Outlet, useLocation, useNavigate, useSearchParams } from "reac
 import { Icon, type IconName } from "./Icon";
 import { Logo } from "./Logo";
 import { CommandPalette } from "./CommandPalette";
+import { AccountMenu } from "./AccountMenu";
 import { SettingsDialog } from "./SettingsDialog";
 import { InstallPrompt } from "./InstallPrompt";
 import { useNewGroup } from "./NewGroupDialog";
 import { LangIcon } from "./LangIcon";
 import { useSnippets } from "../hooks/snippets";
+import { useVault } from "../hooks/vault";
 import { useAuth } from "../hooks/auth";
 import { useOnline, useTheme, useToast } from "../hooks/ui";
 import { LANGUAGES } from "../lib/utils";
+import { recentSearches, pushRecentSearch, clearRecentSearches } from "../lib/search";
 
 const SYNC_LABEL = { synced: "Synced", syncing: "Syncing…", offline: "Offline" } as const;
 
@@ -22,13 +25,17 @@ export function Shell() {
   const loc = useLocation();
   const online = useOnline();
   const { snippets, sync, groups: allGroupNames, groupMeta, save } = useSnippets();
+  const { items: vaultItems, status: vaultStatus, available: vaultAvailable, lock: lockVault } = useVault();
   const [dropOn, setDropOn] = useState<string | null>(null);
   const toast = useToast();
   const { isLight, toggle: toggleTheme } = useTheme();
   const [params, setParams] = useSearchParams();
   const [palette, setPalette] = useState(false);
   const [settings, setSettings] = useState(false);
+  const [more, setMore] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
+  const [recent, setRecent] = useState<string[]>(() => recentSearches());
+  const [searchFocus, setSearchFocus] = useState(false);
 
   const q = params.get("q") ?? "";
   const onSearch = (v: string) => {
@@ -36,6 +43,15 @@ export function Shell() {
     if (isLibrary) setParams(v ? { q: v } : {}, { replace: true });
     else nav(v ? `/?q=${encodeURIComponent(v)}` : "/");
   };
+
+  /* the "More" sheet closes on navigation and on Escape */
+  useEffect(() => { setMore(false); }, [loc.pathname]);
+  useEffect(() => {
+    if (!more) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMore(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [more]);
 
   /* global shortcuts */
   useEffect(() => {
@@ -71,6 +87,8 @@ export function Shell() {
     return { langs, tags, groups };
   }, [snippets, allGroupNames]);
   const favs = snippets.filter((s) => s.favorite).length;
+  const sharedCount = snippets.filter((s) => s.share_token).length + Object.values(groupMeta).filter((m) => m.share_token).length;
+  const moreActive = ["/vault", "/shared", "/insights"].some((p) => loc.pathname === p || loc.pathname.startsWith(`${p}/`));
 
   const item = "relative flex w-full items-center gap-2.5 rounded-[9px] px-2.5 py-2 text-left text-sm font-medium text-muted transition hover:bg-surface-2 hover:text-ink";
   const active = "!bg-accent/15 !text-ink font-bold before:absolute before:-left-3 before:top-2 before:bottom-2 before:w-[3px] before:rounded-r before:bg-accent before:content-['']";
@@ -96,9 +114,34 @@ export function Shell() {
           <span className="sr-only">Search snippets</span>
           <Icon name="search" className="absolute left-3 top-[10px] text-faint" />
           <input ref={searchRef} type="search" value={q} onChange={(e) => onSearch(e.target.value)}
+            onFocus={() => setSearchFocus(true)}
+            onBlur={() => { setSearchFocus(false); if (q.trim().length >= 2) setRecent(pushRecentSearch(q)); }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && q.trim().length >= 2) setRecent(pushRecentSearch(q));
+              else if (e.key === "Escape") { setSearchFocus(false); e.currentTarget.blur(); }
+            }}
             placeholder="Search title, code or tag…"
             className="h-[38px] w-full rounded-[10px] border border-line bg-surface pl-10 pr-11 outline-none transition placeholder:text-faint focus:border-accent focus:ring-[3px] focus:ring-accent/20" />
           <kbd className="absolute right-2 top-2 hidden rounded-md border border-b-2 border-line-strong bg-surface-3 px-1.5 font-mono text-[11px] text-muted md:block">/</kbd>
+          {searchFocus && !q && recent.length > 0 && (
+            <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 overflow-hidden rounded-[12px] border border-line-strong bg-surface p-1.5 text-left shadow-[0_24px_60px_-16px_rgba(0,0,0,.7)]">
+              <div className="flex items-center justify-between px-2.5 pb-1 pt-1">
+                <span className="text-[11px] font-bold uppercase tracking-[.1em] text-faint">Recent searches</span>
+                <button type="button" className="text-[11.5px] font-semibold text-faint hover:text-ink"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => { clearRecentSearches(); setRecent([]); }}>Clear</button>
+              </div>
+              {recent.map((r) => (
+                <button key={r} type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => { onSearch(r); setSearchFocus(false); }}
+                  className="flex w-full items-center gap-2.5 rounded-[9px] px-2.5 py-2 text-left text-sm font-medium text-muted transition hover:bg-surface-2 hover:text-ink">
+                  <Icon name="search" size={15} className="text-faint" />
+                  <span className="min-w-0 flex-1 truncate">{r}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </label>
         <div className="ml-auto flex items-center gap-1.5">
           <span data-s={sync} title={`Sync status: ${SYNC_LABEL[sync]}`}
@@ -109,12 +152,19 @@ export function Shell() {
           <button className="btn btn-ghost !px-2.5 hidden md:inline-flex" aria-label="Command palette" onClick={() => setPalette(true)}>
             <Icon name="command" size={17} />
           </button>
-          <button className="btn btn-ghost !px-2.5" aria-label="Settings" onClick={() => setSettings(true)}>
-            <Icon name="sliders" size={17} />
+          {vaultAvailable && (
+            <button className="btn btn-ghost !px-2.5" aria-label={vaultStatus === "unlocked" ? "Lock the vault" : "Vault"}
+              title={vaultStatus === "unlocked" ? "Lock the vault" : "Vault"}
+              onClick={() => { if (vaultStatus === "unlocked") { lockVault(); toast("Vault locked"); } else nav("/vault"); }}>
+              <Icon name={vaultStatus === "unlocked" ? "unlock" : "lock"} size={17} />
+            </button>
+          )}
+          {/* On phones the bottom nav already carries "New" in the centre, so this
+              button hides below md — one + on screen, always reachable by thumb. */}
+          <button className="btn btn-primary hidden md:inline-flex" onClick={() => nav("/new")}>
+            <Icon name="plus" size={17} /> New
           </button>
-          <button className="btn btn-primary" onClick={() => nav("/new")}>
-            <Icon name="plus" size={17} /> <span className="hidden sm:inline">New</span>
-          </button>
+          <AccountMenu onSettings={() => setSettings(true)} />
         </div>
       </header>
 
@@ -129,6 +179,14 @@ export function Shell() {
             </NavLink>
             <NavLink to="/groups" className={({ isActive }) => `${item} ${isActive ? active : ""}`}>
               <Icon name="folder" size={17} /><span className="flex-1">All groups</span><Count n={allGroupNames.length} />
+            </NavLink>
+            {vaultAvailable && (
+              <NavLink to="/vault" className={({ isActive }) => `${item} ${isActive ? active : ""}`}>
+                <Icon name={vaultStatus === "unlocked" ? "unlock" : "lock"} size={17} /><span className="flex-1">Vault</span><Count n={vaultItems.length} />
+              </NavLink>
+            )}
+            <NavLink to="/shared" className={({ isActive }) => `${item} ${isActive ? active : ""}`}>
+              <Icon name="link" size={17} /><span className="flex-1">Shared snippets</span><Count n={sharedCount} />
             </NavLink>
             <NavLink to="/insights" className={({ isActive }) => `${item} ${isActive ? active : ""}`}>
               <Icon name="chart" size={17} /><span className="flex-1">Insights</span>
@@ -188,15 +246,19 @@ export function Shell() {
 
       <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-bg/90 px-1.5 pb-[calc(6px+env(safe-area-inset-bottom))] pt-1.5 backdrop-blur-xl md:hidden" aria-label="Primary">
         <MobTab to="/" icon="library" label="Library" end />
-        <MobTab to="/groups" icon="folder" label="Groups" />
+        <MobTab to="/favorites" icon="star" label="Favourites" />
         <button onClick={() => nav("/new")} aria-label="New snippet" className="flex flex-col items-center gap-0.5 py-1 text-[11px] font-semibold text-accent-ink">
           <span className="grid h-[34px] w-[46px] place-items-center rounded-xl bg-accent"><Icon name="plus" /></span>
         </button>
-        <MobTab to="/insights" icon="chart" label="Insights" />
-        <button onClick={() => setSettings(true)} className="flex flex-col items-center gap-0.5 rounded-xl py-1.5 text-[11px] font-semibold text-faint">
-          <Icon name="sliders" /> Settings
+        <MobTab to="/groups" icon="folder" label="Groups" />
+        <button onClick={() => setMore(true)} aria-label="More" aria-haspopup="dialog" aria-expanded={more}
+          className={`flex flex-col items-center gap-0.5 rounded-xl py-1.5 text-[11px] font-semibold ${moreActive ? "text-ink [&_svg]:text-accent" : "text-faint"}`}>
+          <Icon name="more" /> More
         </button>
       </nav>
+
+      <MoreSheet open={more} onClose={() => setMore(false)} onSettings={() => setSettings(true)}
+        vaultAvailable={vaultAvailable} vaultUnlocked={vaultStatus === "unlocked"} vaultCount={vaultItems.length} sharedCount={sharedCount} />
 
       <InstallPrompt aboveNav />
       <CommandPalette open={palette} onClose={() => setPalette(false)} onSettings={() => setSettings(true)} />
@@ -221,5 +283,44 @@ function MobTab({ to, icon, label, end }: { to: string; icon: IconName; label: s
       className={({ isActive }) => `flex flex-col items-center gap-0.5 rounded-xl py-1.5 text-[11px] font-semibold ${isActive ? "text-ink [&_svg]:text-accent" : "text-faint"}`}>
       <Icon name={icon} /> {label}
     </NavLink>
+  );
+}
+
+function SheetRow({ icon, label, count, onClick }: { icon: IconName; label: string; count?: number; onClick(): void }) {
+  return (
+    <button onClick={onClick} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-[15px] font-semibold text-ink transition hover:bg-surface-2 active:bg-surface-2">
+      <Icon name={icon} size={19} className="text-accent" />
+      <span className="flex-1">{label}</span>
+      {count !== undefined && <Count n={count} />}
+    </button>
+  );
+}
+
+function MoreSheet({ open, onClose, onSettings, vaultAvailable, vaultUnlocked, vaultCount, sharedCount }: {
+  open: boolean; onClose(): void; onSettings(): void;
+  vaultAvailable: boolean; vaultUnlocked: boolean; vaultCount: number; sharedCount: number;
+}) {
+  const nav = useNavigate();
+  if (!open) return null;
+  const go = (to: string) => { onClose(); nav(to); };
+  return (
+    <div className="fixed inset-0 z-40 md:hidden" role="dialog" aria-modal="true" aria-label="More">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm anim-fade" onClick={onClose} />
+      <div className="anim-sheet absolute inset-x-0 bottom-0 rounded-t-[22px] border-t border-line-strong bg-surface p-3 pb-[calc(14px+env(safe-area-inset-bottom))] shadow-[0_-20px_60px_-20px_rgba(0,0,0,.6)]">
+        <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-line-strong" />
+        <div className="mb-1 flex items-center justify-between px-3">
+          <span className="text-[11px] font-bold uppercase tracking-[.1em] text-faint">More</span>
+          <button aria-label="Close" onClick={onClose} className="grid size-7 place-items-center rounded-lg text-muted hover:bg-surface-2 hover:text-ink"><Icon name="x" size={15} /></button>
+        </div>
+        <div className="grid gap-0.5">
+          {vaultAvailable && (
+            <SheetRow icon={vaultUnlocked ? "unlock" : "lock"} label="Vault" count={vaultCount} onClick={() => go("/vault")} />
+          )}
+          <SheetRow icon="link" label="Shared snippets" count={sharedCount} onClick={() => go("/shared")} />
+          <SheetRow icon="chart" label="Insights" onClick={() => go("/insights")} />
+          <SheetRow icon="sliders" label="Settings" onClick={() => { onClose(); onSettings(); }} />
+        </div>
+      </div>
+    </div>
   );
 }

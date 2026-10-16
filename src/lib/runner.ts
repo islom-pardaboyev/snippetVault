@@ -25,7 +25,9 @@ export interface RunHandlers {
   onDone(info: { ms: number; stopped: boolean }): void;
 }
 
-const frameHtml = frameTpl.replace("__WORKER_SRC__", JSON.stringify(workerSrc).replace(/<\//g, "<\\/"));
+// The worker source is inlined into the frame; a replacer *function* is used so that `$&`, `$'`
+// and similar sequences inside the source can't be interpreted as replacement patterns.
+const frameHtml = frameTpl.replace("__WORKER_SRC__", () => JSON.stringify(workerSrc).replace(/<\//g, "<\\/"));
 let pyFrame: HTMLIFrameElement | null = null;
 
 function createFrame(): HTMLIFrameElement {
@@ -104,6 +106,10 @@ export function runSnippet(language: string, code: string, h: RunHandlers): { st
       h.onDone({ ms: Math.round(performance.now() - started), stopped: false });
       return;
     }
+    // Stop may have been pressed while the TypeScript transform was loading. If so the run is
+    // already finished and cleaned up — don't attach a listener or spin up a frame that nothing
+    // will ever stop.
+    if (finished) return;
     window.addEventListener("message", onMessage);
     if (kind === "py") {
       const fresh = !pyFrame;

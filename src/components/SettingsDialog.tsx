@@ -1,9 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "./Icon";
+import { Select } from "./Select";
+import { PasscodeDots, PasscodePad } from "./PasscodePad";
+import { PwMeter, passwordValid } from "./PwMeter";
 import { useTheme, useInstall, useToast } from "../hooks/ui";
 import { isAdminEmail, useAuth, authMessage } from "../hooks/auth";
 import { useSnippets } from "../hooks/snippets";
+import { useAppLock } from "../hooks/applock";
+import { AUTOLOCK_OPTIONS, MAX_CODE_LEN, MIN_CODE_LEN, codeIssue } from "../lib/applock";
 import { exportJson, parseImport, seedSnippets } from "../lib/utils";
 import type { Accent, ThemeMode } from "../lib/types";
 
@@ -120,6 +125,8 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose(): vo
           </Row>
         </Section>
 
+        <Security />
+
         <Section title="Keyboard shortcuts">
           <div className="grid gap-x-6 sm:grid-cols-2">
             {SHORTCUTS.map(([l, k]) => (
@@ -151,8 +158,9 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose(): vo
                     className="w-full rounded-[10px] border border-line bg-surface-2 px-3 py-2.5 outline-none focus:border-accent" />
                   <input type="password" autoComplete="new-password" placeholder="New password (8+ characters)" value={newPw} onChange={(e) => setNewPw(e.target.value)}
                     className="w-full rounded-[10px] border border-line bg-surface-2 px-3 py-2.5 outline-none focus:border-accent" />
+                  <PwMeter pw={newPw} min={8} />
                   {pwNote.text && <p className={`text-[13px] ${pwNote.ok ? "text-accent" : "text-danger"}`}>{pwNote.text}</p>}
-                  <button className="btn btn-primary" disabled={!curPw || !newPw}>Update password</button>
+                  <button className="btn btn-primary" disabled={!curPw || !passwordValid(newPw)}>Update password</button>
                 </form>
               )}
             </div>
@@ -164,6 +172,123 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose(): vo
         </Section>
       </div>
     </dialog>
+  );
+}
+
+function Security() {
+  const { enabled, autoLockMs, enable, disable, changeCode, setAutoLock, lockNow } = useAppLock();
+  const toast = useToast();
+  const [mode, setMode] = useState<null | "on" | "change" | "off">(null);
+  const [cur, setCur] = useState("");
+  const [code, setCode] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [slot, setSlot] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
+
+  const clear = () => { setMode(null); setSlot(0); setCur(""); setCode(""); setConfirm(""); setNote(""); setBusy(false); };
+  const open = (m: "on" | "change" | "off") => { setMode(mode === m ? null : m); setSlot(0); setCur(""); setCode(""); setConfirm(""); setNote(""); };
+
+  /* Each mode is a short walk through the same keypad: current → new → confirm. There is no
+     <input> anywhere in the flow, so a phone's keyboard never covers the keys. */
+  const steps = mode === "change" ? ["cur", "new", "confirm"] : mode === "on" ? ["new", "confirm"] : ["cur"];
+  const step = steps[Math.min(slot, steps.length - 1)] ?? "cur";
+  const atLast = slot >= steps.length - 1;
+  const value = step === "cur" ? cur : step === "new" ? code : confirm;
+  const setValue = step === "cur" ? setCur : step === "new" ? setCode : setConfirm;
+  const label = step === "cur" ? "Current code" : step === "new" ? "New code" : "Confirm new code";
+
+  const onEnable = async () => {
+    setBusy(true);
+    try { await enable(code); toast("App lock is on"); clear(); }
+    catch { setNote("Couldn't turn on the app lock on this device."); setBusy(false); }
+  };
+  const onChange = async () => {
+    setBusy(true);
+    try { await changeCode(cur, code); toast("App code changed"); clear(); }
+    catch { setNote("That current code is wrong."); setBusy(false); }
+  };
+  const onDisable = async () => {
+    setBusy(true);
+    try { await disable(cur); toast("App lock is off"); clear(); }
+    catch { setNote("That code is wrong."); setBusy(false); }
+  };
+
+  const ready = value.length >= MIN_CODE_LEN;
+  const mismatch = step === "confirm" && confirm.length > 0 && code !== confirm;
+  /* "Continue" only needs the step you're on filled in; the final button needs the whole flow valid. */
+  const lastStepValid =
+    mode === "on" ? !codeIssue(code, confirm)
+    : mode === "change" ? !!cur && !codeIssue(code, confirm)
+    : !codeIssue(cur);
+  const blockedNow = busy || (atLast ? !lastStepValid : !ready);
+
+  const advance = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (blockedNow) return;
+    if (!atLast) { setSlot((s) => s + 1); return; }
+    if (mode === "on") void onEnable();
+    else if (mode === "change") void onChange();
+    else void onDisable();
+  };
+
+  const hint = note
+    || (mismatch ? "The two codes don't match." : ready ? "Looks good." : `Use at least ${MIN_CODE_LEN} digits.`);
+
+  return (
+    <Section title="Security">
+      <Row label="App lock" hint={enabled ? "On — a code is required to open the app on this device" : "Require a code to open SnippetVault on this device"}>
+        {enabled ? (
+          <div className="flex flex-wrap gap-2">
+            <button className="btn" onClick={() => open("change")}>{mode === "change" ? "Cancel" : "Change code"}</button>
+            <button className="btn" onClick={lockNow}><Icon name="lock" size={16} /> Lock now</button>
+            <button className="btn btn-danger" onClick={() => open("off")}>{mode === "off" ? "Cancel" : "Turn off"}</button>
+          </div>
+        ) : (
+          <button className="btn" onClick={() => open("on")}>{mode === "on" ? "Cancel" : "Turn on"}</button>
+        )}
+      </Row>
+
+      {enabled && (
+        <Row label="Auto-lock" hint="Lock again after the app has been in the background">
+          <Select ariaLabel="Auto-lock" align="right" className="w-[190px]" value={String(autoLockMs)}
+            onChange={(v) => { setAutoLock(Number(v)); toast("Auto-lock updated"); }}
+            options={AUTOLOCK_OPTIONS.map((o) => ({ value: String(o.value), label: o.label }))} />
+        </Row>
+      )}
+
+      {mode && (
+        <form onSubmit={advance} className="grid gap-2.5 pb-2">
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-[13px] font-semibold">{label}</span>
+            {steps.length > 1 && <span className="text-[12px] text-faint">Step {slot + 1} of {steps.length}</span>}
+          </div>
+
+          <PasscodeDots filled={value.length} slots={4} invalid={mismatch || !!note} />
+          <p role="status" aria-live="polite"
+            className={`min-h-[17px] text-center text-[12.5px] ${note || mismatch ? "text-danger" : "text-faint"}`}>
+            {hint}
+          </p>
+
+          <button className={mode === "off" ? "btn btn-danger" : "btn btn-primary"} disabled={blockedNow}>
+            {atLast ? (mode === "on" ? "Turn on app lock" : mode === "change" ? "Change code" : "Turn off app lock") : "Continue"}
+          </button>
+          {atLast && slot > 0 && (
+            <button type="button" className="link-btn" onClick={() => { setSlot(0); setCode(""); setConfirm(""); setNote(""); }}>
+              Start over
+            </button>
+          )}
+
+          <PasscodePad value={value} disabled={busy} label={label} max={MAX_CODE_LEN}
+            onChange={(next) => { setValue(next); if (note) setNote(""); }} />
+        </form>
+      )}
+
+      <p className="pt-1 text-[12.5px] text-faint">
+        The app lock is a <b className="text-muted">device privacy screen</b>, not encryption — it stops someone who picks up your
+        unlocked phone from opening the app. Your snippets aren't scrambled by it. Use the <b className="text-muted">Vault</b> for data you need to keep secret.
+      </p>
+    </Section>
   );
 }
 

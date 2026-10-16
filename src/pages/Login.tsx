@@ -4,6 +4,7 @@ import { useOnline } from "../hooks/ui";
 import { Logo } from "../components/Logo";
 import { Icon } from "../components/Icon";
 import { CodeBlock } from "../components/CodeBlock";
+import { PwMeter, passwordValid } from "../components/PwMeter";
 
 const DEMO_CODE = `const vault = await snippets.search("debounce");
 
@@ -110,8 +111,14 @@ export function Login() {
               <input className={input} type={show ? "text" : "password"} autoComplete="new-password" placeholder="Repeat your password"
                 value={pw2} onChange={(e) => setPw2(e.target.value)} /></label>
           )}
+          {mode === "up" && (
+            <div className="-mt-1 mb-4 rounded-xl border border-line bg-surface-2/60 px-3.5 py-3">
+              <p className="mb-1 text-[11px] font-bold uppercase tracking-[.1em] text-faint">Password requirements</p>
+              <PwMeter pw={pw} confirm={pw2} min={8} />
+            </div>
+          )}
 
-          <button className="btn btn-primary btn-lg btn-wide" disabled={busy || !online}>
+          <button className="btn btn-primary btn-lg btn-wide" disabled={busy || !online || (mode === "up" && !passwordValid(pw, pw2))}>
             {busy ? "Please wait…" : mode === "up" ? "Create account" : "Sign in"}
           </button>
           {!online && <p className="mt-3 text-[13px] text-danger">You're offline — connect to the internet to sign in.</p>}

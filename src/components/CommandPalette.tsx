@@ -2,16 +2,21 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon, type IconName } from "./Icon";
 import { useSnippets } from "../hooks/snippets";
+import { useVault } from "../hooks/vault";
 import { useTheme } from "../hooks/ui";
 import { LangIcon } from "./LangIcon";
+import { parseQuery, scoreSnippet } from "../lib/search";
+import { snippetOf } from "../lib/vault";
+import type { Snippet } from "../lib/types";
 
-interface Item { id: string; label: string; sub?: string; icon?: IconName; lang?: string; run(): void; section: "Actions" | "Snippets"; }
+interface Item { id: string; label: string; sub?: string; icon?: IconName; lang?: string; run(): void; section: "Actions" | "Snippets" | "Vault"; }
 
 export function CommandPalette({ open, onClose, onSettings }: { open: boolean; onClose(): void; onSettings(): void }) {
   const ref = useRef<HTMLDialogElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const nav = useNavigate();
   const { snippets } = useSnippets();
+  const { status: vaultStatus, entries: vaultEntries } = useVault();
   const { toggle: toggleTheme } = useTheme();
   const [q, setQ] = useState("");
   const [idx, setIdx] = useState(0);
@@ -34,14 +39,27 @@ export function CommandPalette({ open, onClose, onSettings }: { open: boolean; o
       { id: "a-set", section: "Actions", label: "Settings", icon: "sliders", run: onSettings },
     ];
     const needle = q.trim().toLowerCase();
+    const parsed = parseQuery(q);
+    const searchable = needle.length > 0;
     const list = snippets
-      .filter((s) => !needle || `${s.title} ${s.language} ${s.tags.join(" ")} ${s.description} ${s.code}`.toLowerCase().includes(needle))
-      .sort((a, b) => +new Date(b.updated_at) - +new Date(a.updated_at))
+      .map((s) => ({ s, score: searchable ? scoreSnippet(s, parsed) : 1 }))
+      .filter((x): x is { s: (typeof snippets)[number]; score: number } => x.score !== null)
+      .sort((a, b) => (searchable ? b.score - a.score : +new Date(b.s.updated_at) - +new Date(a.s.updated_at)))
       .slice(0, 8)
-      .map<Item>((s) => ({ id: s.id, section: "Snippets", label: s.title, sub: s.language, lang: s.language, run: go(`/s/${s.id}`) }));
+      .map<Item>(({ s }) => ({ id: s.id, section: "Snippets", label: s.title, sub: s.language, lang: s.language, run: go(`/s/${s.id}`) }));
     const acts = needle ? actions.filter((a) => a.label.toLowerCase().includes(needle)) : actions;
-    return [...acts, ...list];
-  }, [q, snippets, nav, toggleTheme, onSettings]);
+    // While the vault is unlocked, search reaches into it (read-only — opens the vault detail).
+    const vault = vaultStatus === "unlocked" && searchable
+      ? vaultEntries
+          .map(snippetOf)
+          .map((s) => ({ s, score: scoreSnippet(s, parsed) }))
+          .filter((x): x is { s: Snippet; score: number } => x.score !== null)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 5)
+          .map<Item>(({ s }) => ({ id: `v-${s.id}`, section: "Vault", label: s.title, sub: s.language, icon: "lock", run: go(`/vault/${s.id}`) }))
+      : [];
+    return [...acts, ...list, ...vault];
+  }, [q, snippets, vaultStatus, vaultEntries, nav, toggleTheme, onSettings]);
 
   useEffect(() => setIdx(0), [q]);
 
