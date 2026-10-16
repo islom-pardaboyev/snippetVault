@@ -12,6 +12,10 @@ splash screen and full-screen window; you keep every property of the web deploy:
 
 The packaged `.apk` is only for sideload testing; Play accepts the `.aab`.
 
+**Phones browsing the website get a landing page** inviting them to install the app — SnippetVault
+is a large-screen workspace (see `SETUP.md` → *Small screens*). That gate is skipped inside the
+installed app, which reports `display-mode: standalone`, so the TWA always opens the real app.
+
 ## Prerequisites
 
 - The site deployed on **HTTPS** (packaging fetches `https://<your-domain>/manifest.webmanifest`).
@@ -27,14 +31,18 @@ bubblewrap doctor     # verifies Java + Android SDK
 
 ## 2. Init the project
 
-**Generate the project in its own folder — never inside the web repo** (it produces a full Gradle
-project *and* your signing keystore):
+**Generate the project in its own folder** — it produces a full Gradle project *and* your signing
+keystore, neither of which belongs in the web source. In this repo the Android project lives in
+`android/`:
 
 ```bash
-mkdir -p ~/Desktop/snippetvault-android && cd ~/Desktop/snippetvault-android
+mkdir -p android && cd android
 bubblewrap init --manifest=https://<your-domain>/manifest.webmanifest
-# or, without cd: bubblewrap init --manifest=... --directory=~/Desktop/snippetvault-android
+# or anywhere else: bubblewrap init --manifest=... --directory=~/Desktop/snippetvault-android
 ```
+
+The keystore is kept **outside** the project, at the repo root (`android.keystore`) — ignored by the
+`*.keystore` rule in `.gitignore`. All build commands below run from `android/`.
 
 Recommended answers:
 
@@ -56,6 +64,7 @@ can never update the published app again — you'd have to publish a brand-new l
 ## 3. Build
 
 ```bash
+cd android
 bubblewrap build
 ```
 
@@ -73,6 +82,10 @@ bubblewrap install
 Verify before publishing: full-screen (no address bar), Google sign-in popup, vault
 setup/unlock, offline start.
 
+> **Google sign-in inside the app** needs the domain in **Firebase → Authentication → Settings →
+> Authorized domains** (add `<your-domain>`). Without it the popup fails with
+> `auth/unauthorized-domain`.
+
 ## 4. Domain verification (full-screen)
 
 Chrome only hides its address bar when the domain proves it trusts the APK, via
@@ -80,6 +93,7 @@ Chrome only hides its address bar when the domain proves it trusts the APK, via
 `public/.well-known/assetlinks.json`. After building, put the **real SHA-256 fingerprint** in:
 
 ```bash
+cd android
 keytool -printcert -jarfile app-release-signed.apk | grep -A1 SHA256
 # (or: bubblewrap updateAssetLinks — regenerates the file from the keystore)
 ```
@@ -103,6 +117,10 @@ key), package-name typo, or the file not reachable at `https://<domain>/.well-kn
 4. Content-rating questionnaire (honest answers; no ads, no user-to-user content beyond links).
 5. Upload the `.aab` to **Internal testing** first, install via the Play testing link, then
    promote to **Production**.
+6. **Play App Signing:** Google re-signs the app with its own key when distributing. Copy the
+   SHA-256 from **Play Console → Test and release → Setup → App signing** into
+   `public/.well-known/assetlinks.json` as a **second** fingerprint and redeploy — otherwise the
+   Play-installed version shows the address bar.
 
 ## Day-2 operations
 
@@ -115,12 +133,18 @@ key), package-name typo, or the file not reachable at `https://<domain>/.well-kn
   keep the PNGs in `public/` in sync. `branding.ts` still recolors the *installed PWA* manifest at
   runtime via a `blob:` URL — packaging reads the generated file, never the `blob:`.
 
+- If you regenerate the project, re-apply the `minSdkVersion` bump below (Bubblewrap's template
+  still ships 21).
+
 ## Troubleshooting
 
 | Symptom | Cause |
 | --- | --- |
 | `bubblewrap init` can't fetch the manifest | Site not deployed yet, or wrong URL — must be the HTTPS static file, not `blob:` |
 | `Invalid URL` on an icon prompt | The value has a stray trailing space (Bubblewrap doesn't trim). Clear the line (`Ctrl+U`) and retype it |
-| App shows an address bar | `assetlinks.json` wrong/missing (fingerprint, package name, path) |
+| `Manifest merger failed: uses-sdk:minSdkVersion 21 … androidbrowserhelper 2.7.4` | Raise `minSdkVersion` to `24` in **both** `android/app/build.gradle` and `android/twa-manifest.json` |
+| App shows an address bar | `assetlinks.json` wrong/missing (fingerprint, package name, path) — or Chrome cached the earlier failure: confirm the live file is `application/json` with the right fingerprint, then reinstall the app |
 | Google sign-in popup blocked | You are testing a non-TWA wrapper (Capacitor) — popups only work in this TWA route |
+| Google sign-in fails with `auth/unauthorized-domain` | Add the domain in Firebase → Authentication → Settings → Authorized domains |
 | Old design after deploy | Hard-close the app once (swipe away) if a cached shell lingers |
+| A phone's browser shows an "install the app" page | Expected — small screens are sent to the app. "Continue on the web instead" opts that device out |

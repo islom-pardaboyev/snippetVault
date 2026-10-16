@@ -4,13 +4,14 @@ import { useAuth } from "./hooks/auth";
 import { useAppLock } from "./hooks/applock";
 import { SnippetsProvider } from "./hooks/snippets";
 import { VaultProvider } from "./hooks/vault";
-import { useOnline, useToast } from "./hooks/ui";
+import { useOnline, useToast, useAppLanding } from "./hooks/ui";
 import { Shell } from "./components/Shell";
 import { LogoMark } from "./components/Logo";
 import { Library } from "./pages/Library";
 import { NotFound } from "./pages/NotFound";
 import { Offline } from "./pages/Offline";
 import { InstallPrompt } from "./components/InstallPrompt";
+import { MobileLanding } from "./components/MobileLanding";
 import { LockScreen } from "./components/LockScreen";
 
 const Editor = lazy(() => import("./pages/Editor").then((m) => ({ default: m.Editor })));
@@ -130,6 +131,8 @@ function SWUpdateNotice() {
 
 function Root() {
   const { pathname } = useLocation();
+  const { show: landing, continueOnWeb } = useAppLanding();
+
   // Public routes rendered outside the auth gate: share links and the legal pages
   // (a logged-out visitor must be able to read the terms before signing up).
   if (/^\/share\//.test(pathname) || pathname === "/privacy" || pathname === "/terms") {
@@ -142,6 +145,11 @@ function Root() {
       </Routes>
     );
   }
+
+  // Phones browsing the site are pointed at the installable app; the installed app and larger
+  // screens go straight through. Public routes above stay reachable on any device.
+  if (landing) return <MobileLanding onContinue={continueOnWeb} />;
+
   return <Gate />;
 }
 

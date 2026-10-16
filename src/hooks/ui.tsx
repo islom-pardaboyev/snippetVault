@@ -3,6 +3,7 @@ import type { Accent, ThemeMode } from "../lib/types";
 import { Icon } from "../components/Icon";
 import { applyBranding } from "../lib/branding";
 import { inkFor, isHex } from "../lib/color";
+import { LANDING_MIN_WIDTH, WEB_BYPASS_KEY, shouldShowAppLanding } from "../lib/app";
 
 export const ACCENT_HEX: Record<Exclude<Accent, "custom">, string> = {
   lime: "#c8f542", sky: "#8ecbff", blue: "#4f8cff", violet: "#a597ff", pink: "#ff7ab8",
@@ -147,4 +148,76 @@ export function useInstall() {
     emit();
   }, []);
   return { canInstall: !!evt && !installed, installed, install, ios: isIOS() && !installed };
+}
+
+/* ---------- small-screen landing gate ---------- */
+
+/** True inside the Android Trusted Web Activity wrapper (launched from the home screen). */
+export const isTwa = () =>
+  typeof document !== "undefined" && document.referrer.startsWith("android-app://");
+
+export const isAndroid = () =>
+  typeof navigator !== "undefined" && /android/i.test(navigator.userAgent);
+
+/** Phone/tablet user agent — used to tell a real small device from a narrowed desktop window. */
+export const isMobileUA = () =>
+  typeof navigator !== "undefined" && /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
+
+/** Reactive `matchMedia`, seeded synchronously so the first paint is already correct. */
+export function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(() => typeof window !== "undefined" && matchMedia(query).matches);
+  useEffect(() => {
+    const mq = matchMedia(query);
+    const update = () => setMatches(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, [query]);
+  return matches;
+}
+
+/**
+ * True when the page is the *installed* app rather than a browser tab — any standalone-ish
+ * display mode, iOS's `navigator.standalone`, or the TWA referrer. Breadth is deliberate: a
+ * false negative would wrongly show the landing page inside the app, which is the one mistake
+ * this feature must never make.
+ */
+export function useInstalledApp(): boolean {
+  const display = useMediaQuery(
+    "(display-mode: standalone), (display-mode: minimal-ui), (display-mode: fullscreen)",
+  );
+  const [iosStandalone] = useState(
+    () => typeof navigator !== "undefined" &&
+      (navigator as Navigator & { standalone?: boolean }).standalone === true,
+  );
+  return display || iosStandalone || isTwa();
+}
+
+const landingDismissed = () => {
+  try { return localStorage.getItem(WEB_BYPASS_KEY) === "1"; } catch { return false; }
+};
+
+/**
+ * Decides whether a visit gets the "install the app" landing page: phones in a browser do, the
+ * installed app and larger screens never do. `continueOnWeb` lets a phone visitor opt out for
+ * good, so nobody is ever locked out of the site.
+ */
+export function useAppLanding() {
+  const narrowViewport = useMediaQuery(`(max-width: ${LANDING_MIN_WIDTH - 1}px)`);
+  const coarsePointer = useMediaQuery("(pointer: coarse)");
+  const [mobileUA] = useState(isMobileUA);
+  const standalone = useInstalledApp();
+  const [bypassed, setBypassed] = useState(landingDismissed);
+
+  const mobileDevice = coarsePointer || mobileUA;
+
+  const continueOnWeb = useCallback(() => {
+    try { localStorage.setItem(WEB_BYPASS_KEY, "1"); } catch { /* private mode — session only */ }
+    setBypassed(true);
+  }, []);
+
+  return {
+    show: shouldShowAppLanding({ standalone, narrowViewport, mobileDevice, bypassed }),
+    continueOnWeb,
+  };
 }

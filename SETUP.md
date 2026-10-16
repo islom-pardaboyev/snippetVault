@@ -36,6 +36,18 @@ changes — see `docs/android-twa.md`. The web manifest is generated from `vite.
 at `/manifest.webmanifest`; the placeholder `public/.well-known/assetlinks.json` is what verifies
 the Android app to the domain (needed for publishing).
 
+## Small screens
+
+SnippetVault is a large-screen workspace, so a **phone browsing the site** (narrow viewport *and* a
+mobile device, outside the installed app) gets a landing page inviting it to install the app
+instead — see `src/components/MobileLanding.tsx` and `shouldShowAppLanding()` in `src/lib/app.ts`.
+The installed app (TWA or added-to-home-screen PWA) and larger screens always get the real app, and
+`/share/*`, `/privacy` and `/terms` stay reachable on every device. A visitor who taps **Continue on
+the web instead** is never asked again (`localStorage: sv:mobile-web`).
+
+Set `VITE_ANDROID_APP_URL` to point "Install the app" somewhere other than the Play listing — a
+direct APK URL is handy before publishing.
+
 ## What's inside
 
 | Path | Purpose |
