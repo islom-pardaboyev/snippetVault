@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { useAuth, authMessage } from "../hooks/auth";
 import { useOnline } from "../hooks/ui";
 import { Logo } from "../components/Logo";
@@ -132,6 +133,13 @@ export function Login() {
           </div>
 
         </form>
+
+        <p className="mt-7 w-full max-w-[380px] text-center text-[12.5px] leading-relaxed text-faint">
+          By creating an account or signing in, you agree to our{" "}
+          <Link to="/terms" className="underline underline-offset-4 transition hover:text-muted">Terms of Service</Link>
+          {" "}and{" "}
+          <Link to="/privacy" className="underline underline-offset-4 transition hover:text-muted">Privacy Policy</Link>.
+        </p>
       </section>
     </div>
   );

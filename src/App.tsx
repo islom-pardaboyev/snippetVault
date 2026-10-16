@@ -1,10 +1,10 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "./hooks/auth";
 import { useAppLock } from "./hooks/applock";
 import { SnippetsProvider } from "./hooks/snippets";
 import { VaultProvider } from "./hooks/vault";
-import { useOnline } from "./hooks/ui";
+import { useOnline, useToast } from "./hooks/ui";
 import { Shell } from "./components/Shell";
 import { LogoMark } from "./components/Logo";
 import { Library } from "./pages/Library";
@@ -23,6 +23,8 @@ const Admin = lazy(() => import("./pages/Admin").then((m) => ({ default: m.Admin
 const Shared = lazy(() => import("./pages/Shared").then((m) => ({ default: m.Shared })));
 const VaultPage = lazy(() => import("./pages/Vault").then((m) => ({ default: m.Vault })));
 const VaultDetailPage = lazy(() => import("./pages/Vault").then((m) => ({ default: m.VaultDetail })));
+const Privacy = lazy(() => import("./pages/Legal").then((m) => ({ default: m.Privacy })));
+const Terms = lazy(() => import("./pages/Legal").then((m) => ({ default: m.Terms })));
 
 const Fallback = () => <div className="skeleton mx-auto h-72 max-w-[1240px] rounded-card" />;
 const Page = ({ C }: { C: React.ComponentType }) => (
@@ -82,12 +84,60 @@ function Gate() {
   );
 }
 
+/**
+ * PWA update notice. The service worker updates itself (auto-update mode: skipWaiting +
+ * clientsClaim), but the open page keeps running the old bundle until it reloads — so offer a
+ * *user-triggered* reload instead of yanking the page out from under someone mid-edit. The very
+ * first install claims the page too; that's not an update, so it's filtered out.
+ */
+function SWUpdateNotice() {
+  const toast = useToast();
+  const shown = useRef(false);
+
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    const sw = navigator.serviceWorker;
+    let controlled = !!sw.controller;
+    let pending = false;
+
+    const show = () => {
+      if (shown.current) return;
+      shown.current = true;
+      toast("A new version of SnippetVault is ready.", {
+        action: { label: "Reload", run: () => location.reload() },
+        ms: 30_000,
+      });
+    };
+    const onChange = () => {
+      if (!controlled) { controlled = true; return; } // initial claim, not an update
+      if (document.visibilityState === "visible") show();
+      else pending = true; // mobile tabs are backgrounded — offer it when they return
+    };
+    const onVis = () => {
+      if (pending && document.visibilityState === "visible") { pending = false; show(); }
+    };
+
+    sw.addEventListener("controllerchange", onChange);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      sw.removeEventListener("controllerchange", onChange);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [toast]);
+
+  return null;
+}
+
 function Root() {
   const { pathname } = useLocation();
-  if (/^\/share\//.test(pathname)) {
+  // Public routes rendered outside the auth gate: share links and the legal pages
+  // (a logged-out visitor must be able to read the terms before signing up).
+  if (/^\/share\//.test(pathname) || pathname === "/privacy" || pathname === "/terms") {
     return (
       <Routes>
         <Route path="/share/:token" element={<Page C={Shared} />} />
+        <Route path="/privacy" element={<Page C={Privacy} />} />
+        <Route path="/terms" element={<Page C={Terms} />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     );
@@ -99,6 +149,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <Root />
+      <SWUpdateNotice />
     </BrowserRouter>
   );
 }

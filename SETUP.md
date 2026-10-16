@@ -27,6 +27,10 @@ npm i -g firebase-tools && firebase login && firebase use --add
 npm run deploy     # builds, then deploys hosting + firestore rules
 ```
 
+On **Vercel**: import the repo (it picks up `vercel.json` for SPA fallback + security headers) and
+set `VITE_FIREBASE_*`, `VITE_ADMIN_EMAIL`, `ADMIN_PASSCODE`, optional `IMB_API` in Project
+Settings. Rules still deploy through `firebase-tools` — see `docs/security.md` §8.
+
 ## What's inside
 
 | Path | Purpose |

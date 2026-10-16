@@ -107,3 +107,13 @@ GitHub Actions runs type-check, tests and a production build on every push and p
 ```bash
 npm run deploy     # build + firebase deploy (hosting and rules)
 ```
+
+Static host is either Firebase Hosting or Vercel — both are configured:
+
+- **SPA fallback and security headers** live in `firebase.json` *and* `vercel.json` (Vercel needs
+  its own copy; deep links like `/share/<token>` 404 without the rewrite). Keep the two in sync.
+- **Firestore rules never deploy with Vercel.** After touching `firestore.rules`, always run
+  `npx firebase-tools deploy --only firestore:rules --project snippetvault-ed43b --non-interactive`
+  regardless of which host serves the site.
+
+Security architecture, CSP rationale and the pre-ship checklist: [`docs/security.md`](docs/security.md).
