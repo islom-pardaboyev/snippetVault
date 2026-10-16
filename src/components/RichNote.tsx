@@ -35,9 +35,32 @@ export interface NoteImageSource { id: string; data: string; w: number; h: numbe
 /** The images the editor/view around this note knows about. Provided by `NoteImages`. */
 const NoteImages = createContext<NoteImageMap>({});
 
-/** Put a reference to an already-loaded image at the cursor. */
-const insertNoteImage = (editor: Editor, id: string) =>
+/**
+ * Is this editor still usable?
+ *
+ * Tiptap builds the editor while rendering, but arms a 1 ms teardown timer for it
+ * (`EditorInstanceManager.scheduleDestroy`) that is only cancelled once the component has
+ * committed. On a slow or interrupted render the timer wins, `Editor.destroy()` runs — and every
+ * editor read afterwards walks into internals that `destroy()` has emptied (`schema` and
+ * `commandManager` become null), which threw
+ * `Cannot read properties of null (reading 'nodes')` when a snippet was opened.
+ *
+ * Worse, `useEditorState` caches its snapshot and hands that stale instance back to the selector
+ * even after Tiptap has swapped in a fresh editor, so the selector itself has to check. Treat a
+ * dead editor as "not ready": Tiptap replaces it and re-renders us a moment later.
+ */
+export const isLiveEditor = (editor: Editor | null | undefined): editor is Editor =>
+  !!editor && !editor.isDestroyed;
+
+/** Characters in a note, read safely — 0 while the editor is between instances (see above). */
+export const noteCharCount = (editor: Editor | null | undefined): number =>
+  isLiveEditor(editor) ? editor.getText().length : 0;
+
+/** Put a reference to an already-loaded image at the cursor — a no-op once the editor is gone. */
+const insertNoteImage = (editor: Editor, id: string) => {
+  if (!isLiveEditor(editor)) return;
   editor.chain().focus().insertContent({ type: "noteImage", attrs: { id } }).run();
+};
 
 /**
  * An image inside a note. The node stores the **id** of an image the snippet (or vault item)
@@ -156,6 +179,14 @@ function ToolBtn({ name, label, on, disabled, onClick }: {
   );
 }
 
+/** Toolbar state while the editor is between instances — see `isLiveEditor`. */
+const IDLE_TOOLBAR = {
+  block: "p",
+  bold: false, italic: false, underline: false, strike: false, code: false,
+  bullet: false, ordered: false, tasks: false, link: false, codeBlock: false,
+  lang: "", canUndo: false, canRedo: false,
+};
+
 function Toolbar({ editor, defaultLang, images, onAddImage }: {
   editor: Editor; defaultLang?: string; images: NoteImageSource[]; onAddImage?(file: File): Promise<string | null>;
 }) {
@@ -179,7 +210,7 @@ function Toolbar({ editor, defaultLang, images, onAddImage }: {
   ];
   const s = useEditorState({
     editor,
-    selector: ({ editor: e }) => ({
+    selector: ({ editor: e }) => (isLiveEditor(e) ? {
       block: e.isActive("codeBlock") ? "code"
         : e.isActive("blockquote") ? "quote"
         : e.isActive("heading", { level: 1 }) ? "h1"
@@ -199,7 +230,7 @@ function Toolbar({ editor, defaultLang, images, onAddImage }: {
       lang: (e.getAttributes("codeBlock").language as string | undefined) ?? "",
       canUndo: e.can().undo(),
       canRedo: e.can().redo(),
-    }),
+    } : IDLE_TOOLBAR),
   });
 
   const setBlock = (v: string) => {
@@ -304,7 +335,7 @@ export function RichNoteEditor({ value, onChange, placeholder, defaultLang, auto
   // A snippet loaded from Firestore arrives after the first render, so adopt it when it does
   // (and only then — never re-set content the user is typing into).
   useEffect(() => {
-    if (!editor) return;
+    if (!isLiveEditor(editor)) return;
     const next = noteToHtml(value);
     if (next && next !== editor.getHTML()) editor.commands.setContent(next, { emitUpdate: false });
   }, [editor, value]);
@@ -340,7 +371,7 @@ export function RichNoteEditor({ value, onChange, placeholder, defaultLang, auto
 
   const chars = useEditorState({
     editor,
-    selector: ({ editor: e }) => (e ? e.getText().length : 0),
+    selector: ({ editor: e }) => noteCharCount(e),
   }) ?? 0;
 
   if (!editor) return <div className="skeleton h-[150px] rounded-[10px]" />;
@@ -376,7 +407,7 @@ export function NoteView({ html, className = "", images = [] }: { html: string |
   });
 
   useEffect(() => {
-    if (editor && content !== editor.getHTML()) editor.commands.setContent(content, { emitUpdate: false });
+    if (isLiveEditor(editor) && content !== editor.getHTML()) editor.commands.setContent(content, { emitUpdate: false });
   }, [editor, content]);
 
   const map = useMemo(() => {
