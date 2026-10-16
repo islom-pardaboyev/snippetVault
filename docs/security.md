@@ -41,7 +41,7 @@ Why each CSP allowance exists:
 | `worker-src` | `blob:` | The runner creates a Worker from a blob URL *inside* the sandbox frame. |
 | `connect-src` | `https://*.googleapis.com` | Firestore, Auth (`identitytoolkit`), Secure Token. |
 | `connect-src` | `https://cdn.jsdelivr.net` | Pyodide fetches its wasm/packages in the worker. |
-| `connect-src` | `https://api.imgbb.com`, `https://i.ibb.co` | Vault image upload + ciphertext download. |
+| `connect-src` | `https://api.imgbb.com`, `https://i.ibb.co`, `https://ibb.co` | Vault image upload, ciphertext download, and best-effort delete. |
 | `img-src` | `https:` (any) | Notes and snippets may embed arbitrary external image URLs. Images cannot execute script. |
 | `style-src` | `'unsafe-inline'` | Tiptap/ProseMirror and CodeMirror inject `<style>` elements at runtime. |
 | `frame-ancestors 'none'`, `object-src 'none'` | — | Clickjacking and plugin content; these are the reasons the header exists. |
@@ -112,6 +112,14 @@ Snippet images (non-vault) are stored as base64 in Firestore and are **not** enc
 vault encrypts. Vault images are encrypted *before* upload; the imgbb API key (in the bundle) only
 ever transmits ciphertext.
 
+**Hosted-image lifecycle.** Moving a snippet *into* the vault re-hosts its images: seal → upload to
+imgbb → **then** delete the plaintext copies from Firestore. Moving *out* (or deleting a vault
+image, a vault item, or the whole account) reverses it: the blob at imgbb is asked to be removed via
+its stored `delete_url` — a reverse-engineered, undocumented, **unverifiable** request (`no-cors`
+POST to `ibb.co/json`, see `deleteHostedImage`). It is best-effort by design: Firestore is deleted
+first, and a failure only strands opaque ciphertext (plus quota) on a third party, never readable
+content — the URL stays in the image record so the owner can reclaim it by hand.
+
 ## 7. Code runner sandbox
 
 ```
@@ -141,7 +149,8 @@ against rules that predate it (or vice versa) breaks share links with permission
 ## 9. Accepted, documented risks
 
 - **imgbb API key ships in the bundle.** Client-only architecture makes it public; it's rotatable
-  and only ever sees ciphertext. (`.env.example` notes this.)
+  and only ever sees ciphertext. (`.env.example` notes this.) Its "delete" is the reverse-engineered
+  `delete_url` request (§6) — undocumented and unverifiable; worst case is stranded ciphertext.
 - **`CSP script-src 'unsafe-inline'`** — see §2; required by the `srcdoc` sandbox design.
 - **Share tokens**: 24 chars from a 62-char alphabet with rejection sampling (`b >= 248` discarded)
   → uniform, ≈143 bits.

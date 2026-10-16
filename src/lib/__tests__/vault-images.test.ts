@@ -36,6 +36,7 @@ vi.mock("../imgbb", () => ({
     if (!bytes) throw new Error("404");
     return Uint8Array.from(bytes);
   },
+  deleteHostedImage: async () => true, // never called in this file — only deletes purge
 }));
 
 const IMAGE: SnippetImage = {

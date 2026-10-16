@@ -219,8 +219,11 @@ images. The fix is to take the bytes out of Firestore.
   can rotate; only ciphertext is ever uploaded.
 - imgbb promises no durable storage — which is exactly why every read is SHA-verified.
 - Free tier has rate limits; one upload may be ≤ 32 MB (we are far under).
-- imgbb has **no delete API**, only the per-image `delete_url` we store. Deleting a vault image
-  removes the Firestore record, not the hosted file.
+- imgbb has **no documented delete API**, only the per-image `delete_url` we store. The app now
+  calls that reverse-engineered endpoint best-effort whenever a vault image record is deleted
+  (single image, whole item, move-out, or account wipe) — see `deleteHostedImage` and §6 of
+  `docs/security.md`. It is unverifiable by design (`no-cors`), so a refusal strands ciphertext
+  and quota, never readable content.
 - The URL is opaque and names a random image id; it points at ciphertext, not at a picture.
 
 **Why not Firebase Storage?** Still the better long-term home (real object storage, deletes,

@@ -6,7 +6,7 @@ import {
   type Sealed, type VaultKdf, fromBase64, openBytes, openText, sealBytes, sealText, sha256, toBase64,
 } from "./crypto";
 import { packBytes, unpackBytes } from "./container";
-import { fetchBlob, hasImgbb, uploadPng } from "./imgbb";
+import { deleteHostedImage, fetchBlob, hasImgbb, uploadPng } from "./imgbb";
 import type { Snippet, SnippetImage } from "./types";
 
 /**
@@ -312,10 +312,27 @@ export async function putVaultItem(uid: string, item: VaultItem): Promise<void> 
   await setDoc(itemDoc(uid, id), data);
 }
 
+/**
+ * Best-effort removal of the hosted (imgbb) ciphertext behind image records. The Firestore
+ * pointers are already gone by the time this runs, so a failure here costs only third-party
+ * storage quota — never readability: what sits at the far end is AES-GCM ciphertext.
+ * Callers don't wait on the host per image; all requests fire in parallel and are settled.
+ */
+async function purgeHosted(images: Omit<VaultImage, "id">[]): Promise<void> {
+  const urls = images.map((im) => im.remote?.delete_url).filter((u): u is string => !!u);
+  if (!urls.length) return;
+  await Promise.allSettled(urls.map((u) => deleteHostedImage(u)));
+}
+
 export async function deleteVaultItem(uid: string, id: string): Promise<void> {
   const snap = await getDocs(imagesCol(uid, id));
+  const images = snap.docs.map((d) => d.data() as Omit<VaultImage, "id">);
+  // The records the user sees go first; then the blobs behind them, best effort. This one
+  // function is what moves *out* of the vault (the plaintext was already restored to
+  // Firestore by the caller) and what deletes it outright — both must drop the host copy.
   await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
   await deleteDoc(itemDoc(uid, id));
+  await purgeHosted(images);
 }
 
 /* ----------------------------------------------------------------- images */
@@ -331,7 +348,10 @@ export async function putVaultImage(uid: string, id: string, image: VaultImage):
 }
 
 export async function deleteVaultImage(uid: string, id: string, imageId: string): Promise<void> {
-  await deleteDoc(imageDoc(uid, id, imageId));
+  const ref = imageDoc(uid, id, imageId);
+  const snap = await getDoc(ref);
+  await deleteDoc(ref);
+  if (snap.exists()) await purgeHosted([snap.data() as Omit<VaultImage, "id">]);
 }
 
 /* --------------------------------------------- plaintext side of a move */
