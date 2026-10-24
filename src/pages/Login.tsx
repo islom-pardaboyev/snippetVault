@@ -41,6 +41,12 @@ export function Login() {
     }
   };
   const google = async () => {
+    // Inside the Android app the popup cannot open; Google sign-in there needs the native
+    // Firebase setup. Say so instead of failing silently.
+    if (isNativeApp) {
+      setNote({ text: "Google sign-in in the app is still being set up. Use your email for now.", kind: "err" });
+      return;
+    }
     setBusy(true);
     setNote({ text: "Opening Google…" });
     try { await signInWithGoogle(); }
@@ -86,8 +92,6 @@ export function Login() {
               <Icon name="download" size={17} /> Download the Android app
             </a>
           )}
-          {/* The popup sign-in cannot run inside the Android WebView; email sign-in works there. */}
-          {!isNativeApp && (
           <button type="button" className="btn btn-lg btn-wide mb-4" onClick={google} disabled={busy || !online}>
             <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden>
               <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z" />
@@ -97,12 +101,9 @@ export function Login() {
             </svg>
             Continue with Google
           </button>
-          )}
-          {!isNativeApp && (
           <div className="mb-4 flex items-center gap-3 text-[12px] uppercase tracking-[.1em] text-faint">
             <span className="h-px flex-1 bg-line" />or<span className="h-px flex-1 bg-line" />
           </div>
-          )}
 
           <label className="mb-3.5 block"><span className="mb-1.5 block text-[12.5px] font-semibold text-muted">Email</span>
             <input className={input} type="email" autoComplete="email" inputMode="email" placeholder="you@example.com"

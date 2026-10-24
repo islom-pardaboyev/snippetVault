@@ -1,4 +1,5 @@
 import { Capacitor } from "@capacitor/core";
+import { StatusBar, Style } from "@capacitor/status-bar";
 
 /** True inside the installed Android app (Capacitor WebView), false in a browser. */
 export const isNativeApp = Capacitor.isNativePlatform();
@@ -14,3 +15,11 @@ export const ANDROID_APK_URL = "/snippetvault.apk";
  * site's SPA rewrite answers that URL with index.html, so the button would save an HTML page.
  */
 export const ANDROID_APK_PUBLISHED = true;
+
+/** Paints the Android status bar to match the app's header, so the system bar and the page read as one. */
+export function syncStatusBar(light: boolean) {
+  if (!isNativeApp) return;
+  void StatusBar.setOverlaysWebView({ overlay: false }).catch(() => undefined);
+  void StatusBar.setBackgroundColor({ color: light ? "#f5f5f4" : "#0c0c0d" }).catch(() => undefined);
+  void StatusBar.setStyle({ style: light ? Style.Light : Style.Dark }).catch(() => undefined);
+}

@@ -1,13 +1,11 @@
-import { Icon } from "./Icon";
-
+/** The app mark: two code brackets with one amber spark, on the ink tile. */
 export function LogoMark({ size = 30 }: { size?: number }) {
   return (
-    <span
-      className="grid place-items-center rounded-[9px] bg-accent text-accent-ink"
-      style={{ width: size, height: size }}
-    >
-      <Icon name="code" size={Math.round(size * 0.6)} className="[stroke-width:2.4]" />
-    </span>
+    <svg width={size} height={size} viewBox="0 0 1024 1024" aria-hidden="true" className="shrink-0">
+      <rect width="1024" height="1024" rx="232" fill="#0c0c0d" />
+      <path d="M404 372 L268 512 L404 652M620 372 L756 512 L620 652" fill="none" stroke="#f3f1ea" strokeWidth="58" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="512" cy="512" r="58" fill="#ffb84d" />
+    </svg>
   );
 }
 
