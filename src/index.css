@@ -77,6 +77,13 @@
   }
 }
 
+/* A fixed strip of page colour over the status-bar area. Without it, content scrolls up behind
+   the transparent system bar and shows through. */
+body::before {
+  content: ""; position: fixed; top: 0; left: 0; right: 0; height: var(--inset-top);
+  background: var(--bg); z-index: 60; pointer-events: none;
+}
+
 /* ---- syntax tokens ---- */
 .t-kw { color: var(--t-kw); } .t-str { color: var(--t-str); } .t-num { color: var(--t-num); }
 .t-fn { color: var(--t-fn); } .t-com { color: var(--t-com); font-style: italic; }
