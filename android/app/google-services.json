@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "255328206534",
+    "project_id": "snippetvault-ed43b",
+    "storage_bucket": "snippetvault-ed43b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:255328206534:android:7e969f5d2c1612096a21c7",
+        "android_client_info": {
+          "package_name": "com.snippetvault.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "255328206534-bd3r0vpbm85q6qmsq521ron9kd4muic2.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCU5aGkfg6eXgCIjGAyehqwhDGSu2k8RcU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "255328206534-bd3r0vpbm85q6qmsq521ron9kd4muic2.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
