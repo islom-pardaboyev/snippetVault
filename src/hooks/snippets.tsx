@@ -111,7 +111,13 @@ export function SnippetsProvider({ children }: { children: ReactNode }) {
   const save = useCallback((s: Snippet) => {
     const t = imgDelete.current.get(s.id);
     if (t) { clearTimeout(t); imgDelete.current.delete(s.id); } // snippet restored (Undo)
-    setSnippets((l) => (l.some((x) => x.id === s.id) ? l.map((x) => (x.id === s.id ? s : x)) : [...l, s]));
+    setSnippets((l) => {
+      const i = l.findIndex((x) => x.id === s.id);
+      if (i === -1) return [...l, s];
+      const next = l.slice();
+      next[i] = s;
+      return next;
+    });
     if (!uid) return;
     const { id, ...data } = s;
     // don't await: with offline persistence the promise settles only after the server acks
@@ -244,12 +250,15 @@ export function SnippetsProvider({ children }: { children: ReactNode }) {
 
   const sync: SyncState = !online ? "offline" : DEMO || (!pending && !fromCache) ? "synced" : "syncing";
 
+  // Index once per change, so `get(id)` is a lookup rather than a scan of the whole vault.
+  const byId = useMemo(() => new Map(snippets.map((s) => [s.id, s])), [snippets]);
+
   const value = useMemo<SnippetsCtx>(() => ({
     snippets, loaded, sync, save, remove, saveMany,
     groups, groupMeta: meta, addGroup, renameGroup, deleteGroup, deleteGroups, updateGroup,
     saveVersion, listVersions,
-    get: (id) => snippets.find((s) => s.id === id),
-  }), [snippets, loaded, sync, save, remove, saveMany, groups, meta, addGroup, renameGroup, deleteGroup, deleteGroups, updateGroup, saveVersion, listVersions]);
+    get: (id) => byId.get(id),
+  }), [snippets, byId, loaded, sync, save, remove, saveMany, groups, meta, addGroup, renameGroup, deleteGroup, deleteGroups, updateGroup, saveVersion, listVersions]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

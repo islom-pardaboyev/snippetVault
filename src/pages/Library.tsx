@@ -190,7 +190,7 @@ export function Library({ mode }: { mode: "all" | "favorites" | "lang" | "tag" |
               <Icon name="folder" size={16} /> New group
             </button>
           )}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {list.length > 0 && (selecting ? (
               <>
                 <button className="btn" onClick={() => setPicked(allPicked ? new Set() : new Set(list.map((s) => s.id)))}>
@@ -202,11 +202,11 @@ export function Library({ mode }: { mode: "all" | "favorites" | "lang" | "tag" |
               <button className="btn" onClick={() => setSelecting(true)}><Icon name="list" size={16} /> Select</button>
             ))}
             {mode !== "group" && (
-              <Select ariaLabel="Group by" value={groupBy} className="min-w-0 flex-1 md:w-[150px] md:flex-none" buttonClass="!px-2.5 text-[13px] md:text-sm"
+              <Select ariaLabel="Group by" value={groupBy} className="min-w-[150px] flex-1 md:w-[150px] md:flex-none" buttonClass="!px-2.5 text-[13px] md:text-sm"
                 onChange={(v) => setP("sv:groupby", v, setGroupBy)}
                 options={[{ value: "none", label: "No grouping" }, { value: "group", label: "By group" }, { value: "language", label: "By language" }]} />
             )}
-            <Select ariaLabel="Sort" value={sort} align="right" className="min-w-0 flex-1 md:w-[150px] md:flex-none" buttonClass="!px-2.5 text-[13px] md:text-sm"
+            <Select ariaLabel="Sort" value={sort} align="right" className="min-w-[150px] flex-1 md:w-[150px] md:flex-none" buttonClass="!px-2.5 text-[13px] md:text-sm"
               onChange={(v) => setP("sv:sort", v, setSort)} options={SORTS.map(([value, label]) => ({ value, label }))} />
             <div className="inline-flex shrink-0 gap-0.5 rounded-[11px] border border-line bg-surface-2 p-[3px]">
               {(["grid", "list"] as const).map((v) => (

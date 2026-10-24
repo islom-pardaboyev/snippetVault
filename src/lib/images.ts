@@ -30,7 +30,7 @@ async function decode(file: File): Promise<{ src: CanvasImageSource; w: number; 
   }
 }
 
-export async function compressImage(file: File): Promise<Compressed> {
+async function compressImage(file: File): Promise<Compressed> {
   if (!file.type.startsWith("image/")) throw new Error("not-image");
   const img = await decode(file);
   try {

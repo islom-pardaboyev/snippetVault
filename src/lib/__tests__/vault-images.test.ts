@@ -21,7 +21,6 @@ const host = vi.hoisted(() => ({
 }));
 
 vi.mock("../imgbb", () => ({
-  imgbbKey: () => "test-key",
   hasImgbb: () => true,
   uploadPng: async (bytes: Uint8Array, name: string) => {
     if (!host.online) throw new Error("host-offline");

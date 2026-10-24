@@ -3,7 +3,7 @@ import { Icon } from "./Icon";
 export function LogoMark({ size = 30 }: { size?: number }) {
   return (
     <span
-      className="grid place-items-center rounded-[10px] bg-accent text-accent-ink shadow-[0_8px_24px_-8px_var(--accent)]"
+      className="grid place-items-center rounded-[9px] bg-accent text-accent-ink"
       style={{ width: size, height: size }}
     >
       <Icon name="code" size={Math.round(size * 0.6)} className="[stroke-width:2.4]" />

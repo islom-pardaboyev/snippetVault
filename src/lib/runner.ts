@@ -9,7 +9,7 @@ import frameTpl from "./sandbox/frame.html?raw";
  *
  * Killing the iframe kills the worker, so infinite loops are stopped by a timeout.
  */
-export const RUNNABLE = ["JavaScript", "TypeScript", "Python"] as const;
+const RUNNABLE = ["JavaScript", "TypeScript", "Python"] as const;
 export const isRunnable = (lang: string) => (RUNNABLE as readonly string[]).includes(lang);
 
 const PYODIDE = "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/";

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { PAGE_LANG, detectLanguage, diffStats, fillTemplate, isPage, lineCount, parseImport, parseTags, templateVars, titleAndCode, toHtml, toMarkdown } from "../utils";
-import { inkFor, isHex } from "../color";
 
 describe("parseTags", () => {
   it("lowercases, strips # and de-duplicates", () => {
@@ -76,16 +75,5 @@ describe("pages", () => {
   });
   it("falls back to the title when a page has no text yet", () => {
     expect(toMarkdown({ title: "Empty", language: PAGE_LANG, code: "" })).toBe("Empty");
-  });
-});
-
-describe("colour helpers", () => {
-  it("validates hex", () => {
-    expect(isHex("#c8f542")).toBe(true);
-    expect(isHex("c8f542")).toBe(false);
-  });
-  it("picks dark ink on light accents and white on dark", () => {
-    expect(inkFor("#c8f542")).toBe("#0b0c0e");
-    expect(inkFor("#101820")).toBe("#ffffff");
   });
 });

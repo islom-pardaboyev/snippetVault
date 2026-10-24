@@ -64,13 +64,12 @@ export function LockScreen() {
   };
 
   return (
-    <div className="grid min-h-screen place-items-center px-6 py-8 sm:py-10
-      bg-[radial-gradient(800px_460px_at_50%_-10%,color-mix(in_srgb,var(--accent)_12%,transparent),transparent_60%)]">
+    <div className="grid min-h-screen place-items-center px-6 py-8 sm:py-10">
       <div className="w-full max-w-[380px]">
         <div className="mb-6 flex flex-col items-center text-center">
-          <div className="mb-4 grid size-14 place-items-center rounded-2xl bg-accent/15 text-accent"><Icon name="lock" size={26} /></div>
+          <div className="mb-4 grid size-12 place-items-center rounded-[14px] border border-line-strong bg-surface-2 text-ink"><Icon name="lock" size={22} /></div>
           <div className="mb-3"><Logo size={30} text="text-lg" /></div>
-          <h1 className="text-[24px] font-bold tracking-tight">App locked</h1>
+          <h1 className="text-[24px] font-semibold tracking-[-0.02em]">App locked</h1>
           <p className="mt-1 text-muted">
             {email ? <>Enter your app code to open <b className="text-ink">{email}</b>.</> : "Enter your app code to continue."}
           </p>

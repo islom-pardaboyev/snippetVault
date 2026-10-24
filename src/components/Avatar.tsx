@@ -6,7 +6,7 @@ export function accountName(displayName?: string | null, email?: string | null) 
 }
 
 /** One or two letters used when an account has no profile picture. */
-export function initials(name: string) {
+function initials(name: string) {
   const words = name.trim().split(/\s+/).filter(Boolean);
   if (!words.length) return "?";
   const first = words[0][0];

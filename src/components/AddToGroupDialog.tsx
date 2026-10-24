@@ -3,7 +3,7 @@ import { Icon } from "./Icon";
 import { useSnippets } from "../hooks/snippets";
 import { useToast } from "../hooks/ui";
 
-const input = "w-full rounded-[10px] border border-line bg-surface-2 px-3 py-2 text-[13.5px] outline-none transition placeholder:text-faint focus:border-accent focus:ring-[3px] focus:ring-accent/20";
+const input = "field";
 
 /** Pick existing snippets (not already in `group`) and move them into it. */
 export function AddToGroupDialog({ open, group, onClose }: { open: boolean; group: string; onClose(): void }) {

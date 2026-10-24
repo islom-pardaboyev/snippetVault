@@ -4,7 +4,7 @@ import { Icon } from "./Icon";
 import { useSnippets } from "../hooks/snippets";
 import { useToast } from "../hooks/ui";
 
-const input = "w-full rounded-[10px] border border-line bg-surface-2 px-3 py-3 outline-none transition placeholder:text-faint focus:border-accent focus:ring-[3px] focus:ring-accent/20";
+const input = "field";
 
 /** Create-group flow: name + optionally move existing snippets into it. Returns [start, dialogElement]. */
 export function useNewGroup(): [() => void, ReactElement] {

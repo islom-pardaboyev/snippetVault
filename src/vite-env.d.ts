@@ -3,8 +3,6 @@
 interface ImportMetaEnv {
   /** Only this Google account can open /admin */
   readonly VITE_ADMIN_EMAIL?: string;
-  /** Play Store (or direct APK) URL behind "Install the app" on the phone landing page. */
-  readonly VITE_ANDROID_APP_URL?: string;
 }
 
 /** SHA-256 of ADMIN_PASSCODE, injected by vite.config.ts at build time ("" when unset). */

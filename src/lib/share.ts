@@ -37,7 +37,7 @@ export interface ShareMeta {
   views?: number;
 }
 
-export interface SharedImage { id: string; data: string; w: number; h: number; }
+interface SharedImage { id: string; data: string; w: number; h: number; }
 
 export interface SharedSnippet {
   id: string;
@@ -59,7 +59,7 @@ const ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789
 const NEVER = new Date("9999-12-31T00:00:00.000Z");
 
 /** 24-char, cryptographically random, URL-safe id (~142 bits). */
-export function newShareToken(): string {
+function newShareToken(): string {
   const out: string[] = [];
   while (out.length < 24) {
     const bytes = new Uint8Array(24 - out.length);

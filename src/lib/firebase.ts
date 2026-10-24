@@ -19,7 +19,7 @@ const firebaseConfig = {
 };
 
 export const projectId = firebaseConfig.projectId;
-export const app = initializeApp(firebaseConfig);
+const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 
 // Offline-first: snippets are cached in IndexedDB and writes queue while offline.

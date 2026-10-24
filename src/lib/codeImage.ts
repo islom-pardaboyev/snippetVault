@@ -44,17 +44,17 @@ function palette() {
   const css = getComputedStyle(document.documentElement);
   const v = (name: string, fallback: string) => css.getPropertyValue(name).trim() || fallback;
   return {
-    bg: v("--bg", "#0a0b0d"),
-    surface: v("--surface", "#111316"),
-    line: v("--line", "#242930"),
-    muted: v("--muted", "#8c919b"),
-    faint: v("--faint", "#5b616b"),
-    ink: v("--text", "#eceae4"),
-    accent: v("--accent", "#c8f542"),
+    bg: v("--bg", "#0c0c0d"),
+    surface: v("--surface", "#131315"),
+    line: v("--line", "#242428"),
+    muted: v("--muted", "#8e8e96"),
+    faint: v("--faint", "#5d5d65"),
+    ink: v("--text", "#ededee"),
+    accent: v("--accent", "#ededee"),
     tok: {
-      kw: v("--t-kw", "#f2a65a"), str: v("--t-str", "#9ad5a0"), num: v("--t-num", "#7cc4ff"),
-      fn: v("--t-fn", "#c5a8ff"), com: v("--t-com", "#5f6672"), prop: v("--t-prop", "#7cc4ff"),
-      tag: v("--t-tag", "#ff8f8f"), type: v("--t-type", "#f0d58a"),
+      kw: v("--t-kw", "#b9a6e6"), str: v("--t-str", "#9fc79b"), num: v("--t-num", "#dcae78"),
+      fn: v("--t-fn", "#93b4e6"), com: v("--t-com", "#5d5d65"), prop: v("--t-prop", "#93b4e6"),
+      tag: v("--t-tag", "#e69a9a"), type: v("--t-type", "#dccb97"),
     } as Record<string, string>,
   };
 }

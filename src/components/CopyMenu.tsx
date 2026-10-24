@@ -5,7 +5,7 @@ import { copyText, isPage, titleAndCode, toHtml, toMarkdown } from "../lib/utils
 import { noteText } from "../lib/note";
 import { copyImage, downloadBlob, renderSnippetPng } from "../lib/codeImage";
 
-export interface Copyable { code: string; language: string; title: string; notes?: string; }
+interface Copyable { code: string; language: string; title: string; notes?: string; }
 
 interface Props {
   snippet: Copyable;

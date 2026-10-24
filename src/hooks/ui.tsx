@@ -1,14 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import type { Accent, ThemeMode } from "../lib/types";
+import type { ThemeMode } from "../lib/types";
 import { Icon } from "../components/Icon";
-import { applyBranding } from "../lib/branding";
-import { inkFor, isHex } from "../lib/color";
-import { LANDING_MIN_WIDTH, WEB_BYPASS_KEY, shouldShowAppLanding } from "../lib/app";
-
-export const ACCENT_HEX: Record<Exclude<Accent, "custom">, string> = {
-  lime: "#c8f542", sky: "#8ecbff", blue: "#4f8cff", violet: "#a597ff", pink: "#ff7ab8",
-  coral: "#ff8a65", red: "#ff6b6b", amber: "#ffc83d", green: "#4ade80", cyan: "#4fe0dc",
-};
 
 /* ---------- online status ---------- */
 export function useOnline() {
@@ -23,51 +15,55 @@ export function useOnline() {
 }
 
 /* ---------- theme ---------- */
-interface ThemeCtx {
-  theme: ThemeMode; accent: Accent; accentHex: string; customColor: string;
-  setTheme(t: ThemeMode): void; setAccent(a: Accent): void; setCustomColor(hex: string): void;
-  isLight: boolean; toggle(): void;
-}
+const THEME_KEY = "sv:theme";
+const LIGHT_BG = "#f5f5f4";
+const DARK_BG = "#0c0c0d";
+
+interface ThemeCtx { theme: ThemeMode; setTheme(t: ThemeMode): void; isLight: boolean; toggle(): void; }
 const ThemeContext = createContext<ThemeCtx | null>(null);
 
-function read<T extends string>(key: string, fallback: T): T {
-  try { return (localStorage.getItem(key) as T) || fallback; } catch { return fallback; }
+const systemLight = () => typeof matchMedia !== "undefined" && matchMedia("(prefers-color-scheme: light)").matches;
+
+function readTheme(): ThemeMode {
+  try {
+    const t = localStorage.getItem(THEME_KEY);
+    return t === "light" || t === "dark" || t === "system" ? t : "dark";
+  } catch { return "dark"; }
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeMode>(() => read("sv:theme", "dark"));
-  const [accent, setAccentState] = useState<Accent>(() => read("sv:accent", "lime"));
-  const [customColor, setCustomState] = useState<string>(() => { const c = read("sv:accent-custom", "#8ecbff"); return isHex(c) ? c : "#8ecbff"; });
-  const accentHex = accent === "custom" ? customColor : (ACCENT_HEX[accent as keyof typeof ACCENT_HEX] ?? ACCENT_HEX.lime);
-  /* Cross-fade real switches (not the first paint): hold `.theme-anim` on <html> briefly so
-     colours transition instead of snapping — see the matching rule in index.css. */
+  const [theme, setThemeState] = useState<ThemeMode>(readTheme);
+  const [systemIsLight, setSystemIsLight] = useState(systemLight);
+  const isLight = theme === "light" || (theme === "system" && systemIsLight);
+
+  /* Follow the OS only while the theme is "system". */
+  useEffect(() => {
+    const mq = matchMedia("(prefers-color-scheme: light)");
+    const onChange = () => setSystemIsLight(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  /* Cross-fade real switches (not the first paint): hold `.theme-anim` on <html> briefly. */
   const firstApply = useRef(true);
   const animTimer = useRef(0);
   useEffect(() => () => window.clearTimeout(animTimer.current), []);
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    document.documentElement.dataset.accent = accent;
-    const light = theme === "light" || (theme === "system" && matchMedia("(prefers-color-scheme: light)").matches);
-    const ink = inkFor(accentHex);
-    const rs = document.documentElement.style;
-    rs.setProperty("--accent", accentHex);
-    rs.setProperty("--accent-ink", ink);
-    applyBranding(accentHex, ink, light ? "#f4f1ea" : "#0a0b0d");
-    try {
-      localStorage.setItem("sv:theme", theme); localStorage.setItem("sv:accent", accent);
-      localStorage.setItem("sv:accent-custom", customColor); localStorage.setItem("sv:accent-hex", accentHex);
-    } catch { /* private mode */ }
+    const root = document.documentElement;
+    root.dataset.theme = theme;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", isLight ? LIGHT_BG : DARK_BG);
+    try { localStorage.setItem(THEME_KEY, theme); } catch { /* private mode */ }
     if (firstApply.current) firstApply.current = false;
     else {
-      document.documentElement.classList.add("theme-anim");
+      root.classList.add("theme-anim");
       window.clearTimeout(animTimer.current);
-      animTimer.current = window.setTimeout(() => document.documentElement.classList.remove("theme-anim"), 380);
+      animTimer.current = window.setTimeout(() => root.classList.remove("theme-anim"), 380);
     }
-  }, [theme, accent, accentHex, customColor]);
-  const setCustomColor = useCallback((hex: string) => { if (isHex(hex)) { setCustomState(hex); setAccentState("custom"); } }, []);
-  const isLight = theme === "light" || (theme === "system" && typeof matchMedia !== "undefined" && matchMedia("(prefers-color-scheme: light)").matches);
+  }, [theme, isLight]);
+
+  const setTheme = useCallback((t: ThemeMode) => setThemeState(t), []);
   const toggle = useCallback(() => setThemeState(isLight ? "dark" : "light"), [isLight]);
-  const value = useMemo<ThemeCtx>(() => ({ theme, accent, accentHex, customColor, setTheme: setThemeState, setAccent: setAccentState, setCustomColor, isLight, toggle }), [theme, accent, accentHex, customColor, setCustomColor, isLight, toggle]);
+  const value = useMemo<ThemeCtx>(() => ({ theme, setTheme, isLight, toggle }), [theme, setTheme, isLight, toggle]);
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 export function useTheme() {
@@ -84,12 +80,22 @@ const ToastContext = createContext<ToastCtx | null>(null);
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<ToastItem[]>([]);
   const seq = useRef(0);
+  const timers = useRef(new Set<number>());
+
   const dismiss = useCallback((id: number) => setItems((l) => l.filter((t) => t.id !== id)), []);
   const toast = useCallback<ToastCtx["toast"]>((msg, opts = {}) => {
     const id = ++seq.current;
     setItems((l) => [...l.slice(-2), { id, msg, kind: opts.kind, action: opts.action }]);
-    setTimeout(() => dismiss(id), opts.ms ?? (opts.action ? 6000 : 2200));
+    const timer = window.setTimeout(() => { timers.current.delete(timer); dismiss(id); }, opts.ms ?? (opts.action ? 6000 : 2200));
+    timers.current.add(timer);
   }, [dismiss]);
+
+  // Clear every pending auto-dismiss when the provider unmounts.
+  useEffect(() => {
+    const pending = timers.current;
+    return () => { pending.forEach((t) => window.clearTimeout(t)); pending.clear(); };
+  }, []);
+
   const value = useMemo(() => ({ toast }), [toast]);
   return (
     <ToastContext.Provider value={value}>
@@ -98,11 +104,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         className="fixed left-1/2 -translate-x-1/2 bottom-24 md:bottom-6 z-[100] flex flex-col items-center gap-2 max-w-[calc(100vw-32px)]">
         {items.map((t) => (
           <div key={t.id}
-            className={`anim-rise flex items-center gap-2.5 pl-3.5 pr-2 py-2 rounded-xl text-sm font-semibold shadow-2xl ${t.kind === "err" ? "bg-danger text-[#1a0b0b]" : "bg-ink text-bg"}`}>
+            className={`anim-rise flex items-center gap-2.5 pl-3.5 pr-2 py-2 rounded-xl text-sm font-medium shadow-2xl ${t.kind === "err" ? "bg-danger text-white" : "bg-ink text-bg"}`}>
             {t.kind === "err" && <Icon name="alert" size={16} className="shrink-0" />}
             <span>{t.msg}</span>
             {t.action && (
-              <button className="rounded-lg px-2.5 py-1 font-bold bg-black/15"
+              <button className="rounded-lg px-2.5 py-1 font-semibold bg-black/15"
                 onClick={() => { t.action!.run(); dismiss(t.id); }}>{t.action.label}</button>
             )}
           </div>
@@ -117,7 +123,7 @@ export function useToast() {
   return c.toast;
 }
 
-/* ---------- PWA install ---------- */
+/* ---------- PWA install (desktop and browser menus) ---------- */
 interface BIPEvent extends Event { prompt(): Promise<void>; userChoice: Promise<{ outcome: string }>; }
 // Captured at module load so the event isn't missed by components that mount later.
 let deferred: BIPEvent | null = null;
@@ -130,24 +136,14 @@ if (typeof window !== "undefined") {
 }
 const subscribe = (cb: () => void) => { subs.add(cb); return () => { subs.delete(cb); }; };
 
-export const isIOS = () =>
+const isIOS = () =>
   typeof navigator !== "undefined" &&
   (/iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
 
-/** Every display mode that means "running as an app", not in a browser tab. */
-const STANDALONE_QUERY =
-  "(display-mode: standalone), (display-mode: minimal-ui), (display-mode: fullscreen)";
-
-/**
- * True when the page is the *installed* app rather than a browser tab — any standalone-ish
- * display mode, iOS's `navigator.standalone`, or the TWA referrer. Breadth is deliberate: a
- * false negative would wrongly treat the app as a visitor, which is the one mistake this code
- * must never make (it would show the phone landing page *inside* the app).
- */
-export const isStandalone = () =>
-  matchMedia(STANDALONE_QUERY).matches ||
-  (typeof navigator !== "undefined" && (navigator as Navigator & { standalone?: boolean }).standalone === true) ||
-  isTwa();
+/** True when the page is the installed app rather than a browser tab. */
+const isStandalone = () =>
+  matchMedia("(display-mode: standalone), (display-mode: minimal-ui), (display-mode: fullscreen)").matches ||
+  (typeof navigator !== "undefined" && (navigator as Navigator & { standalone?: boolean }).standalone === true);
 
 export function useInstall() {
   const evt = useSyncExternalStore(subscribe, () => deferred, () => null);
@@ -161,68 +157,4 @@ export function useInstall() {
     emit();
   }, []);
   return { canInstall: !!evt && !installed, installed, install, ios: isIOS() && !installed };
-}
-
-/* ---------- small-screen landing gate ---------- */
-
-/** True inside the Android Trusted Web Activity wrapper (launched from the home screen). */
-export const isTwa = () =>
-  typeof document !== "undefined" && document.referrer.startsWith("android-app://");
-
-export const isAndroid = () =>
-  typeof navigator !== "undefined" && /android/i.test(navigator.userAgent);
-
-/** Phone/tablet user agent — used to tell a real small device from a narrowed desktop window. */
-export const isMobileUA = () =>
-  typeof navigator !== "undefined" && /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
-
-/** A phone or tablet: a mobile UA, or a coarse pointer on a phone-sized viewport (iPad UA is not). */
-export const isMobileDevice = () =>
-  isMobileUA() || (matchMedia("(pointer: coarse)").matches && innerWidth < 900);
-
-/** Reactive `matchMedia`, seeded synchronously so the first paint is already correct. */
-export function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(() => typeof window !== "undefined" && matchMedia(query).matches);
-  useEffect(() => {
-    const mq = matchMedia(query);
-    const update = () => setMatches(mq.matches);
-    update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
-  }, [query]);
-  return matches;
-}
-
-/** Reactive counterpart of `isStandalone` — re-renders when the display mode changes. */
-export function useInstalledApp(): boolean {
-  return useMediaQuery(STANDALONE_QUERY) || isStandalone();
-}
-
-const landingDismissed = () => {
-  try { return localStorage.getItem(WEB_BYPASS_KEY) === "1"; } catch { return false; }
-};
-
-/**
- * Decides whether a visit gets the "install the app" landing page: phones in a browser do, the
- * installed app and larger screens never do. `continueOnWeb` lets a phone visitor opt out for
- * good, so nobody is ever locked out of the site.
- */
-export function useAppLanding() {
-  const narrowViewport = useMediaQuery(`(max-width: ${LANDING_MIN_WIDTH - 1}px)`);
-  const coarsePointer = useMediaQuery("(pointer: coarse)");
-  const [mobileUA] = useState(isMobileUA);
-  const standalone = useInstalledApp();
-  const [bypassed, setBypassed] = useState(landingDismissed);
-
-  const mobileDevice = coarsePointer || mobileUA;
-
-  const continueOnWeb = useCallback(() => {
-    try { localStorage.setItem(WEB_BYPASS_KEY, "1"); } catch { /* private mode — session only */ }
-    setBypassed(true);
-  }, []);
-
-  return {
-    show: shouldShowAppLanding({ standalone, narrowViewport, mobileDevice, bypassed }),
-    continueOnWeb,
-  };
 }

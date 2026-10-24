@@ -6,7 +6,7 @@ import { Icon } from "./Icon";
  */
 
 /** The one hard rule for account passwords (Firebase's own minimum is lower; we ask for 8). */
-export const PW_MIN = 8;
+const PW_MIN = 8;
 
 /** True when the password (and confirmation, if given) satisfies the requirement. */
 export function passwordValid(pw: string, confirm?: string): boolean {
@@ -14,7 +14,7 @@ export function passwordValid(pw: string, confirm?: string): boolean {
 }
 
 /** 0–4 strength buckets: too short, weak, fair, good, strong. */
-export function passwordStrength(pw: string): number {
+function passwordStrength(pw: string): number {
   if (!pw) return 0;
   let s = 0;
   if (pw.length >= PW_MIN) s++;

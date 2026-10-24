@@ -40,7 +40,7 @@ function Passcode({ onOk }: { onOk(): void }) {
   const [code, setCode] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
-  const input = "w-full rounded-[10px] border border-line bg-surface-2 px-3 py-3 outline-none transition focus:border-accent focus:ring-[3px] focus:ring-accent/20";
+  const input = "field";
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();

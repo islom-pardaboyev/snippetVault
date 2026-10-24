@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Icon } from "./Icon";
 import { MAX_IMAGES } from "../lib/images";
 
-export interface GalleryImage { id: string; data: string; w: number; h: number; }
+interface GalleryImage { id: string; data: string; w: number; h: number; }
 
 interface Props {
   images: GalleryImage[];

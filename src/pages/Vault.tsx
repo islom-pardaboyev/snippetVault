@@ -19,7 +19,7 @@ import { hasImgbb } from "../lib/imgbb";
 import type { SnippetImage } from "../lib/types";
 import type { VaultEntry } from "../lib/vault";
 
-const INPUT = "w-full rounded-[10px] border border-line bg-surface-2 px-3 py-3 outline-none transition placeholder:text-faint focus:border-accent focus:ring-[3px] focus:ring-accent/20";
+const INPUT = "field";
 
 /** How many vault images are decrypted (and downloaded) per click of "Load more". */
 const IMAGE_PAGE = 4;

@@ -18,7 +18,6 @@ export interface Snippet {
 
 export type SyncState = "synced" | "syncing" | "offline";
 export type ThemeMode = "system" | "dark" | "light";
-export type Accent = "lime" | "sky" | "blue" | "violet" | "pink" | "coral" | "red" | "amber" | "green" | "cyan" | "custom";
 
 export interface GroupMeta { color?: string; emoji?: string; share_token?: string; }
 

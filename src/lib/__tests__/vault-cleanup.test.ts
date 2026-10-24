@@ -25,7 +25,6 @@ vi.mock("../firebase", () => ({ db: {} }));
 
 vi.mock("../imgbb", () => ({
   hasImgbb: () => true,
-  imgbbKey: () => "test-key",
   uploadPng: async () => { throw new Error("upload not used in this file"); },
   fetchBlob: async () => { throw new Error("download not used in this file"); },
   deleteHostedImage: async (url: string) => {

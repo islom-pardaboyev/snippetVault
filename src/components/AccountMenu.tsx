@@ -3,30 +3,16 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Icon, type IconName } from "./Icon";
 import { Avatar, accountName } from "./Avatar";
 import { isAdminEmail, useAuth } from "../hooks/auth";
-import { useTheme, useToast, isAndroid, useInstalledApp } from "../hooks/ui";
-import { APK_URL, APK_FILE } from "../lib/app";
+import { useTheme, useToast } from "../hooks/ui";
 
-type MenuItemProps = {
-  icon: IconName;
-  label: string;
-  hint?: string;
-  danger?: boolean;
-  /** Renders as a link instead of a button — used by the APK download. */
-  href?: string;
-  download?: string;
-  onClick(): void;
-};
-
-function MenuItem({ icon, label, hint, danger, href, download, onClick }: MenuItemProps) {
+function MenuItem({ icon, label, danger, onClick }: { icon: IconName; label: string; danger?: boolean; onClick(): void }) {
   const cls = `flex w-full items-center gap-2.5 rounded-[9px] px-2.5 py-2 text-left text-sm font-medium transition ${danger ? "text-muted hover:bg-danger/15 hover:text-danger" : "text-muted hover:bg-surface-2 hover:text-ink"}`;
   const body = (
     <>
       <Icon name={icon} size={17} />
       <span className="flex-1 truncate">{label}</span>
-      {hint && <span className="text-xs text-faint">{hint}</span>}
     </>
   );
-  if (href) return <a role="menuitem" href={href} download={download} onClick={onClick} className={cls}>{body}</a>;
   return <button type="button" role="menuitem" onClick={onClick} className={cls}>{body}</button>;
 }
 
@@ -39,11 +25,6 @@ export function AccountMenu({ onSettings }: { onSettings(): void }) {
   const loc = useLocation();
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
-
-  // Offer the APK to Android phones browsing the site only: inside the installed app it is
-  // redundant, and an APK is meaningless anywhere but Android.
-  const installed = useInstalledApp();
-  const offerApk = isAndroid() && !installed;
 
   const name = accountName(user?.displayName, email);
   // Header button shows just the name; the dropdown keeps the full name + email.
@@ -100,14 +81,6 @@ export function AccountMenu({ onSettings }: { onSettings(): void }) {
           {isAdminEmail(email) && <MenuItem icon="lock" label="Admin" onClick={run(() => nav("/admin"))} />}
           <MenuItem icon={isLight ? "moon" : "sun"} label={isLight ? "Dark mode" : "Light mode"}
             onClick={run(() => { toggleTheme(); toast(isLight ? "Dark mode" : "Light mode"); })} />
-
-          {offerApk && (
-            <>
-              <div className="my-1 h-px bg-line" />
-              <MenuItem icon="download" label="Download APK" hint="Android" href={APK_URL}
-                download={APK_FILE} onClick={() => setOpen(false)} />
-            </>
-          )}
 
           <div className="my-1 h-px bg-line" />
 

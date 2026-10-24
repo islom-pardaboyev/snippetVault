@@ -5,7 +5,6 @@ import { Logo } from "./Logo";
 import { CommandPalette } from "./CommandPalette";
 import { AccountMenu } from "./AccountMenu";
 import { SettingsDialog } from "./SettingsDialog";
-import { InstallPrompt } from "./InstallPrompt";
 import { useNewGroup } from "./NewGroupDialog";
 import { LangIcon } from "./LangIcon";
 import { useSnippets } from "../hooks/snippets";
@@ -122,7 +121,7 @@ export function Shell() {
             }}
             placeholder="Search title, code or tag…"
             className="h-[38px] w-full rounded-[10px] border border-line bg-surface pl-10 pr-11 outline-none transition placeholder:text-faint focus:border-accent focus:ring-[3px] focus:ring-accent/20" />
-          <kbd className="absolute right-2 top-2 hidden rounded-md border border-b-2 border-line-strong bg-surface-3 px-1.5 font-mono text-[11px] text-muted md:block">/</kbd>
+          <kbd className="absolute right-2 top-2 hidden rounded-md border border-line-strong bg-surface-3 px-1.5 font-mono text-[11px] text-muted md:block">/</kbd>
           {searchFocus && !q && recent.length > 0 && (
             <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 overflow-hidden rounded-[12px] border border-line-strong bg-surface p-1.5 text-left shadow-[0_24px_60px_-16px_rgba(0,0,0,.7)]">
               <div className="flex items-center justify-between px-2.5 pb-1 pt-1">
@@ -260,7 +259,6 @@ export function Shell() {
       <MoreSheet open={more} onClose={() => setMore(false)} onSettings={() => setSettings(true)}
         vaultAvailable={vaultAvailable} vaultUnlocked={vaultStatus === "unlocked"} vaultCount={vaultItems.length} sharedCount={sharedCount} />
 
-      <InstallPrompt aboveNav />
       <CommandPalette open={palette} onClose={() => setPalette(false)} onSettings={() => setSettings(true)} />
       <SettingsDialog open={settings} onClose={() => setSettings(false)} />
     </div>

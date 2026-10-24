@@ -10,15 +10,8 @@ import { useSnippets } from "../hooks/snippets";
 import { useAppLock } from "../hooks/applock";
 import { AUTOLOCK_OPTIONS, MAX_CODE_LEN, MIN_CODE_LEN, codeIssue } from "../lib/applock";
 import { exportJson, parseImport, seedSnippets } from "../lib/utils";
-import type { Accent, ThemeMode } from "../lib/types";
+import type { ThemeMode } from "../lib/types";
 
-const ACCENTS: { id: Accent; c: string; name: string }[] = [
-  { id: "lime", c: "#c8f542", name: "Lime" }, { id: "sky", c: "#8ecbff", name: "Light blue" },
-  { id: "blue", c: "#4f8cff", name: "Blue" }, { id: "violet", c: "#a597ff", name: "Violet" },
-  { id: "pink", c: "#ff7ab8", name: "Pink" }, { id: "coral", c: "#ff8a65", name: "Coral" },
-  { id: "red", c: "#ff6b6b", name: "Red" }, { id: "amber", c: "#ffc83d", name: "Amber" },
-  { id: "green", c: "#4ade80", name: "Green" }, { id: "cyan", c: "#4fe0dc", name: "Cyan" },
-];
 const THEMES: { id: ThemeMode; label: string }[] = [
   { id: "system", label: "System" }, { id: "dark", label: "Dark" }, { id: "light", label: "Light" },
 ];
@@ -30,7 +23,7 @@ const SHORTCUTS: [string, string][] = [
 export function SettingsDialog({ open, onClose }: { open: boolean; onClose(): void }) {
   const ref = useRef<HTMLDialogElement>(null);
   const file = useRef<HTMLInputElement>(null);
-  const { theme, accent, customColor, setTheme, setAccent, setCustomColor } = useTheme();
+  const { theme, setTheme } = useTheme();
   const { email, user, logout, hasPassword, changePassword } = useAuth();
   const nav = useNavigate();
   const [pwOpen, setPwOpen] = useState(false);
@@ -85,25 +78,6 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose(): vo
               ))}
             </div>
           </Row>
-          <Row label="Accent" hint="Also recolours the logo, favicon and app icon">
-            <div className="flex max-w-[280px] flex-wrap justify-end gap-2.5">
-              {ACCENTS.map((a) => (
-                <button key={a.id} aria-label={a.name} title={a.name} onClick={() => setAccent(a.id)}
-                  className="size-7 rounded-full outline-offset-2 transition"
-                  style={{ background: a.c, outline: accent === a.id ? `2px solid ${a.c}` : "1px solid var(--line-strong)", border: accent === a.id ? "2px solid var(--bg)" : "none" }} />
-              ))}
-              <label title="Custom colour" aria-label="Custom colour"
-                className="relative size-7 cursor-pointer overflow-hidden rounded-full outline-offset-2"
-                style={{
-                  background: accent === "custom" ? customColor : "conic-gradient(#ff6b6b,#ffc83d,#4ade80,#4fe0dc,#4f8cff,#a597ff,#ff7ab8,#ff6b6b)",
-                  outline: accent === "custom" ? `2px solid ${customColor}` : "1px solid var(--line-strong)",
-                  border: accent === "custom" ? "2px solid var(--bg)" : "none",
-                }}>
-                <input type="color" value={customColor} onChange={(e) => setCustomColor(e.target.value)}
-                  className="absolute inset-0 size-full cursor-pointer opacity-0" />
-              </label>
-            </div>
-          </Row>
         </Section>
 
         <Section title="Your data">
@@ -131,7 +105,7 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose(): vo
           <div className="grid gap-x-6 sm:grid-cols-2">
             {SHORTCUTS.map(([l, k]) => (
               <div key={l} className="flex items-center justify-between border-b border-line py-2 text-sm text-muted">
-                {l}<kbd className="rounded-md border border-b-2 border-line-strong bg-surface-3 px-1.5 font-mono text-[11px]">{k}</kbd>
+                {l}<kbd className="rounded-md border border-line-strong bg-surface-3 px-1.5 font-mono text-[11px]">{k}</kbd>
               </div>
             ))}
           </div>
@@ -155,11 +129,11 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose(): vo
               {pwOpen && (
                 <form onSubmit={submitPw} className="grid gap-2 pb-2">
                   <input type="password" autoComplete="current-password" placeholder="Current password" value={curPw} onChange={(e) => setCurPw(e.target.value)}
-                    className="w-full rounded-[10px] border border-line bg-surface-2 px-3 py-2.5 outline-none focus:border-accent" />
+                    className="w-full rounded-[10px] border border-line bg-surface-2 px-3 py-2.5 outline-none focus:border-line-strong" />
                   <input type="password" autoComplete="new-password" placeholder="New password (8+ characters)" value={newPw} onChange={(e) => setNewPw(e.target.value)}
-                    className="w-full rounded-[10px] border border-line bg-surface-2 px-3 py-2.5 outline-none focus:border-accent" />
+                    className="w-full rounded-[10px] border border-line bg-surface-2 px-3 py-2.5 outline-none focus:border-line-strong" />
                   <PwMeter pw={newPw} min={8} />
-                  {pwNote.text && <p className={`text-[13px] ${pwNote.ok ? "text-accent" : "text-danger"}`}>{pwNote.text}</p>}
+                  {pwNote.text && <p className={`text-[13px] ${pwNote.ok ? "text-ink" : "text-danger"}`}>{pwNote.text}</p>}
                   <button className="btn btn-primary" disabled={!curPw || !passwordValid(newPw)}>Update password</button>
                 </form>
               )}

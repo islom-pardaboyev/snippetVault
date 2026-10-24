@@ -24,7 +24,7 @@ const MAX_UPLOAD = 32 * 1024 * 1024; // imgbb's documented per-file ceiling
  * The injected key. Reads through `typeof` so importing this module outside a Vite build
  * (unit tests, a stray script) doesn't throw a ReferenceError — it just means "no key".
  */
-export function imgbbKey(): string {
+function imgbbKey(): string {
   return typeof __IMGBB_KEY__ === "string" ? __IMGBB_KEY__.trim() : "";
 }
 

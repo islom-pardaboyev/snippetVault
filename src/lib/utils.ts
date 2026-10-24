@@ -14,7 +14,7 @@ export const LANGUAGES = [
   "JSON", "Go", "Rust", "Java", "C++", "PHP", "Markdown", "Page",
 ] as const;
 
-export const LANG_COLOR: Record<string, string> = {
+const LANG_COLOR: Record<string, string> = {
   JavaScript: "#f7df1e", TypeScript: "#3b82f6", Python: "#5b9bd5", SQL: "#e38c00",
   Shell: "#4eaa25", Terminal: "#3ddc84", CSS: "#4d8bff", HTML: "#e34c26", JSON: "#b8bec7", Go: "#00add8",
   Rust: "#dea584", Java: "#f89820", "C++": "#f34b7d", PHP: "#8892bf", Markdown: "#8b949e",

@@ -29,7 +29,7 @@ Built with **React 19 · TypeScript · Tailwind CSS 4 · Vite · Firebase (Auth 
 - **Run code in the browser** — JavaScript, TypeScript and Python (Pyodide) execute inside a sandboxed iframe + Web Worker with a timeout, so a runaway loop can't touch the app or your data
 - **Editor** — CodeMirror 6 with 15+ languages, language auto-detect, `{{variable}}` templates that prompt before copying
 - **Version history** with line diffs, **image attachments**, JSON import/export, Markdown export
-- **Insights** page, light/dark/system theme and custom accent colour
+- **Insights** page and a light / dark / system theme. The interface is deliberately monochrome; colour only appears in code and in danger states
 - **Responsive** — designed down to pocket-phone widths: a five-slot bottom bar (Library · Favourites · **+** · Groups · **More**), layouts that reflow, and no horizontal overflow. The bar carries the only "New" button on a phone, so the header drops it below `md`.
 
 | Sign in | Group with existing snippets | Mobile |

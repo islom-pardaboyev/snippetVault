@@ -1,46 +1,38 @@
-@import "@fontsource-variable/bricolage-grotesque";
+@import "@fontsource-variable/inter";
 @import "@fontsource-variable/jetbrains-mono";
 @import "tailwindcss";
 
-/* ---- tokens: ink & paper neutrals + one accent ---- */
+/* ---- tokens: one neutral scale and a single ink "accent" ----
+   The interface is monochrome: the accent is the ink colour itself (near-black on paper,
+   near-white on night), so primary actions and focus rings stay quiet and high-contrast.
+   Only danger keeps a hue, and code keeps a restrained set of syntax colours. */
 :root, :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #0a0b0d; --surface: #111316; --surface-2: #171a1e; --surface-3: #1f2329;
-  --line: #242930; --line-strong: #353b45; --text: #eceae4; --muted: #8c919b; --faint: #5b616b;
-  --t-kw: #f2a65a; --t-str: #9ad5a0; --t-num: #7cc4ff; --t-fn: #c5a8ff;
-  --t-com: #5f6672; --t-prop: #7cc4ff; --t-tag: #ff8f8f; --t-type: #f0d58a;
+  --bg: #0c0c0d; --surface: #131315; --surface-2: #19191c; --surface-3: #212125;
+  --line: #242428; --line-strong: #34343a; --text: #ededee; --muted: #8e8e96; --faint: #5d5d65;
+  --t-kw: #b9a6e6; --t-str: #9fc79b; --t-num: #dcae78; --t-fn: #93b4e6;
+  --t-com: #5d5d65; --t-prop: #93b4e6; --t-tag: #e69a9a; --t-type: #dccb97;
 }
 :root[data-theme="light"] {
   color-scheme: light;
-  --bg: #f4f1ea; --surface: #fbf9f4; --surface-2: #f0ece3; --surface-3: #e6e1d4;
-  --line: #ddd7c8; --line-strong: #c4bdab; --text: #1b1c1e; --muted: #666870; --faint: #9a9a98;
-  --t-kw: #b45309; --t-str: #15803d; --t-num: #0369a1; --t-fn: #7c3aed;
-  --t-com: #8a8f98; --t-prop: #0369a1; --t-tag: #be123c; --t-type: #92400e;
+  --bg: #f5f5f4; --surface: #ffffff; --surface-2: #efefed; --surface-3: #e5e5e2;
+  --line: #e4e4e1; --line-strong: #cdcdc8; --text: #111112; --muted: #6b6b73; --faint: #9c9ca2;
+  --t-kw: #6b4fb0; --t-str: #3c7a37; --t-num: #9a6419; --t-fn: #2f5fa6;
+  --t-com: #9c9ca2; --t-prop: #2f5fa6; --t-tag: #b0414f; --t-type: #876b14;
 }
 @media (prefers-color-scheme: light) {
   :root[data-theme="system"] {
     color-scheme: light;
-    --bg: #f4f1ea; --surface: #fbf9f4; --surface-2: #f0ece3; --surface-3: #e6e1d4;
-    --line: #ddd7c8; --line-strong: #c4bdab; --text: #1b1c1e; --muted: #666870; --faint: #9a9a98;
-    --t-kw: #b45309; --t-str: #15803d; --t-num: #0369a1; --t-fn: #7c3aed;
-    --t-com: #8a8f98; --t-prop: #0369a1; --t-tag: #be123c; --t-type: #92400e;
+    --bg: #f5f5f4; --surface: #ffffff; --surface-2: #efefed; --surface-3: #e5e5e2;
+    --line: #e4e4e1; --line-strong: #cdcdc8; --text: #111112; --muted: #6b6b73; --faint: #9c9ca2;
+    --t-kw: #6b4fb0; --t-str: #3c7a37; --t-num: #9a6419; --t-fn: #2f5fa6;
+    --t-com: #9c9ca2; --t-prop: #2f5fa6; --t-tag: #b0414f; --t-type: #876b14;
   }
 }
-:root { --accent: #c8f542; --accent-ink: #0b0c0e; }
-/* (the live colour is also set inline by ThemeProvider, so custom colours work) */
-:root[data-accent="lime"] { --accent: #c8f542; }
-:root[data-accent="sky"] { --accent: #8ecbff; }
-:root[data-accent="blue"] { --accent: #4f8cff; }
-:root[data-accent="pink"] { --accent: #ff7ab8; }
-:root[data-accent="red"] { --accent: #ff6b6b; }
-:root[data-accent="green"] { --accent: #4ade80; }
-:root[data-accent="violet"] { --accent: #a597ff; }
-:root[data-accent="coral"] { --accent: #ff8a65; }
-:root[data-accent="cyan"] { --accent: #4fe0dc; }
-:root[data-accent="amber"] { --accent: #ffc83d; }
+:root { --accent: var(--text); --accent-ink: var(--bg); }
 
 @theme inline {
-  --font-sans: "Bricolage Grotesque Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
   --color-bg: var(--bg);
   --color-surface: var(--surface);
@@ -53,8 +45,8 @@
   --color-faint: var(--faint);
   --color-accent: var(--accent);
   --color-accent-ink: var(--accent-ink);
-  --color-danger: #ff6b6b;
-  --radius-card: 16px;
+  --color-danger: #e5484d;
+  --radius-card: 14px;
   --ease-out-expo: cubic-bezier(.22, 1, .36, 1);
 }
 
@@ -62,19 +54,17 @@
   html { -webkit-text-size-adjust: 100%; scrollbar-gutter: stable; }
   body {
     background: var(--bg); color: var(--text);
-    font-family: var(--font-sans); font-size: 15px; line-height: 1.5;
+    font-family: var(--font-sans); font-size: 14.5px; line-height: 1.55;
+    font-feature-settings: "cv11", "ss01";
     -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
-    /* Branded tap feedback instead of the OS's grey flash on Android. */
-    -webkit-tap-highlight-color: color-mix(in srgb, var(--accent) 22%, transparent);
+    -webkit-tap-highlight-color: transparent;
   }
-  /* Thin, themed scrollbars wherever the platform lets us style them (Firefox, Chromium 121+).
-     Safari/macOS keep their native overlay bars, which need no theming. Higher-specificity
-     utilities such as `[scrollbar-width:none]` still win over this. */
+  /* Thin, themed scrollbars wherever the platform lets us style them (Firefox, Chromium 121+). */
   * { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
   button { cursor: pointer; font: inherit; color: inherit; }
-  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
-  ::selection { background: var(--accent); color: var(--accent-ink); }
-  dialog::backdrop { background: rgba(5, 6, 8, .62); backdrop-filter: blur(5px); }
+  :focus-visible { outline: 2px solid var(--text); outline-offset: 2px; border-radius: 6px; }
+  ::selection { background: color-mix(in srgb, var(--text) 18%, transparent); color: var(--text); }
+  dialog::backdrop { background: rgba(0, 0, 0, .5); backdrop-filter: blur(4px); }
   /* Chrome autofills in its own pale yellow; repaint it with the app's own input surface. */
   input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus,
   textarea:-webkit-autofill, select:-webkit-autofill {
@@ -83,21 +73,6 @@
     caret-color: var(--text);
     transition: background-color 99999s ease-out 0s;
   }
-}
-
-/* ---- ambient light ----
-   A barely-there accent glow behind everything. Cards, borders and surfaces already carry
-   the depth; this keeps the flat background from reading as dead — and since it reads
-   `--accent`, it follows every accent change (including custom colours) automatically. */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    radial-gradient(1000px 480px at 50% -10%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 65%),
-    radial-gradient(760px 420px at 92% -4%, color-mix(in srgb, var(--accent) 3%, transparent), transparent 60%);
 }
 
 /* ---- syntax tokens ---- */
@@ -138,7 +113,7 @@ body::before {
 }
 dialog[open] { animation: pop .28s var(--ease-out-expo); }
 
-/* Theme/accent switches cross-fade instead of snapping. ThemeProvider holds this class on
+/* Theme switches cross-fade instead of snapping. ThemeProvider holds this class on
    <html> for a few hundred ms after the change; it dies under prefers-reduced-motion like
    every other transition here. Unlayered, so it also covers Tailwind's own `transition`. */
 .theme-anim *, .theme-anim *::before, .theme-anim *::after {
@@ -153,21 +128,22 @@ dialog[open] { animation: pop .28s var(--ease-out-expo); }
 /* ---- shared components ---- */
 @layer components {
   .btn {
-    @apply inline-flex h-[38px] items-center justify-center gap-2 whitespace-nowrap rounded-[10px] border border-line bg-surface-2 px-3.5 font-semibold text-ink transition duration-150 hover:border-line-strong hover:bg-surface-3 active:scale-[.97] disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex h-[36px] items-center justify-center gap-2 whitespace-nowrap rounded-[9px] border border-line bg-surface-2 px-3.5 text-[13.5px] font-medium text-ink transition duration-150 hover:border-line-strong hover:bg-surface-3 active:scale-[.98] disabled:pointer-events-none disabled:opacity-50;
   }
-  .btn-primary { @apply border-accent bg-accent font-bold text-accent-ink hover:border-accent hover:bg-accent hover:brightness-110; }
+  .btn-primary { @apply border-accent bg-accent font-semibold text-accent-ink hover:bg-accent hover:opacity-90; }
   .btn-ghost { @apply border-transparent bg-transparent text-muted hover:border-transparent hover:bg-surface-2 hover:text-ink; }
   .btn-danger { @apply hover:border-danger/50 hover:text-danger; }
-  .btn-icon { @apply w-[38px] px-0; }
-  .btn-lg { @apply h-[46px] rounded-xl px-5 text-[15.5px]; }
+  .btn-icon { @apply w-[36px] px-0; }
+  .btn-lg { @apply h-[42px] rounded-[10px] px-5 text-[14.5px]; }
   .btn-wide { @apply w-full; }
   .chip { @apply inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-line bg-surface px-3 text-[13px] font-semibold text-muted transition hover:border-line-strong hover:text-ink; }
   .chip-on { @apply border-accent bg-accent text-accent-ink hover:text-accent-ink; }
-  .link-btn { @apply border-0 bg-transparent p-0 text-[13px] text-muted underline underline-offset-[3px] hover:text-ink; }
+  /* Text inputs and textareas: one surface, one focus treatment. */
+  .field {
+    @apply w-full rounded-[9px] border border-line bg-surface-2 px-3 py-2.5 text-[14px] text-ink outline-none transition placeholder:text-faint focus:border-line-strong focus:ring-[3px] focus:ring-ink/10;
+  }
+  .link-btn { @apply border-0 bg-transparent p-0 text-[13px] text-muted underline underline-offset-[3px] decoration-line-strong hover:text-ink; }
 }
-/* A hairline of light along the top edge plus a tight shadow: primary actions read as solid
-   physical objects rather than flat colour. */
-.btn-primary { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), 0 1px 2px rgba(0, 0, 0, .28); }
 
 /* ---- rich notes (Tiptap) ----
    The editor and the read-only view share `.note-prose`, and the syntax colours come from the
@@ -197,7 +173,7 @@ dialog[open] { animation: pop .28s var(--ease-out-expo); }
 .note-prose ul[data-type="taskList"] li[data-checked="true"] > div { color: var(--muted); text-decoration: line-through; }
 .note-prose li { margin: .2em 0; }
 .note-prose li > p { margin: 0; }
-.note-prose blockquote { margin: .7em 0; border-left: 3px solid var(--line-strong); padding-left: .85em; color: var(--muted); }
+.note-prose blockquote { margin: .7em 0; padding-left: .9em; color: var(--muted); }
 .note-prose hr { margin: 1.1em 0; border: 0; border-top: 1px solid var(--line); }
 .note-prose a { color: var(--t-prop); text-decoration: underline; text-underline-offset: 2px; }
 .note-prose strong { font-weight: 700; }

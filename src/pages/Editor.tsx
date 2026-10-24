@@ -168,7 +168,7 @@ export function Editor() {
     return <NotFound what="snippet" />;
   }
 
-  const input = "w-full rounded-[10px] border border-line bg-surface-2 px-3 py-2.5 outline-none transition placeholder:text-faint focus:border-accent focus:ring-[3px] focus:ring-accent/20";
+  const input = "field";
   const label = "mb-1.5 block text-[12.5px] font-semibold text-muted";
 
   return (

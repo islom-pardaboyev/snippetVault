@@ -73,7 +73,7 @@ export interface VaultImage {
 }
 
 /** Plaintext metadata about a hosted blob. The URL is opaque; `iv`/`sha`/`bytes` are not secret. */
-export interface VaultImageRemote {
+interface VaultImageRemote {
   url: string;
   /** base64 GCM IV — needed to decrypt, useless without the vault key. */
   iv: string;

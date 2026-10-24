@@ -30,7 +30,7 @@ export interface ParsedQuery {
 
 const TOKEN_RE = /"[^"]*"|\S+/g;
 
-export function tokenize(raw: string): string[] {
+function tokenize(raw: string): string[] {
   return raw.match(TOKEN_RE) ?? [];
 }
 

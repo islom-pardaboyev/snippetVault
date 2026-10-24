@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Icon } from "./Icon";
 
-export interface Option { value: string; label: string; icon?: ReactNode; hint?: string; }
+interface Option { value: string; label: string; icon?: ReactNode; hint?: string; }
 
 interface Props {
   value: string;

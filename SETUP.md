@@ -31,33 +31,6 @@ On **Vercel**: import the repo (it picks up `vercel.json` for SPA fallback + sec
 set `VITE_FIREBASE_*`, `VITE_ADMIN_EMAIL`, `ADMIN_PASSCODE`, optional `IMB_API` in Project
 Settings. Rules still deploy through `firebase-tools` — see `docs/security.md` §8.
 
-**Android app**: the site packages into a Google Play app (Trusted Web Activity) with no code
-changes — see `docs/android-twa.md`. The web manifest is generated from `vite.config.ts` and served
-at `/manifest.webmanifest`; the placeholder `public/.well-known/assetlinks.json` is what verifies
-the Android app to the domain (needed for publishing).
-
-## Small screens
-
-SnippetVault is a large-screen workspace, so a **phone browsing the site** (narrow viewport *and* a
-mobile device, outside the installed app) gets a landing page inviting it to install the app
-instead — see `src/components/MobileLanding.tsx` and `shouldShowAppLanding()` in `src/lib/app.ts`.
-The installed app (TWA or added-to-home-screen PWA) and larger screens always get the real app, and
-`/share/*`, `/privacy` and `/terms` stay reachable on every device. A visitor who taps **Continue on
-the web instead** is never asked again (`localStorage: sv:mobile-web`).
-
-The site serves its own signed APK at **`/snippetvault.apk`** (kept in `public/`), so the install
-path works with no Play account: the landing page's **Download the app** button and the **Download
-APK** item in the header's account menu (Android phones browsing the site) both point at it. After
-rebuilding the app, refresh it:
-
-```
-cd android && bubblewrap build
-cp android/app-release-signed.apk public/snippetvault.apk
-```
-
-Once the app is published on Play, set `VITE_ANDROID_APP_URL` to the listing URL so the landing
-button sends people to the store instead of the file.
-
 ## What's inside
 
 | Path | Purpose |

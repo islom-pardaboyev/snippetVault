@@ -6,6 +6,7 @@ import { Logo } from "../components/Logo";
 import { Icon } from "../components/Icon";
 import { CodeBlock } from "../components/CodeBlock";
 import { PwMeter, passwordValid } from "../components/PwMeter";
+import { ANDROID_APK_URL, isAndroidBrowser, isNativeApp } from "../lib/native";
 
 const DEMO_CODE = `const vault = await snippets.search("debounce");
 
@@ -51,37 +52,42 @@ export function Login() {
     catch (err) { setNote({ text: authMessage(err), kind: "err" }); }
   };
 
-  const input = "w-full rounded-[10px] border border-line bg-surface-2 px-3 py-3 outline-none transition placeholder:text-faint focus:border-accent focus:ring-[3px] focus:ring-accent/20";
+  const input = "field";
 
   return (
     <div className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
-      <section className="relative flex flex-col justify-between gap-10 overflow-hidden border-b border-line bg-surface px-6 py-7 lg:border-b-0 lg:border-r lg:px-[clamp(28px,5vw,72px)] lg:py-12
-        bg-[radial-gradient(900px_500px_at_10%_-10%,color-mix(in_srgb,var(--accent)_14%,transparent),transparent_60%),radial-gradient(700px_500px_at_110%_110%,color-mix(in_srgb,var(--accent)_9%,transparent),transparent_60%)]">
-        <div aria-hidden className="pointer-events-none absolute inset-0 opacity-50 [background-image:linear-gradient(var(--line)_1px,transparent_1px),linear-gradient(90deg,var(--line)_1px,transparent_1px)] [background-size:48px_48px] [mask-image:radial-gradient(ellipse_at_30%_30%,#000_0%,transparent_70%)]" />
-        <div className="relative"><Logo size={34} text="text-xl" /></div>
-        <div className="relative">
-          <h1 className="mb-4 max-w-[12ch] text-[clamp(36px,5vw,64px)] font-bold leading-[1.02] tracking-[-0.045em]">
-            Every snippet you've <em className="not-italic text-accent">ever</em> needed.
+      <section className="flex flex-col justify-between gap-10 border-b border-line bg-surface px-6 py-7 lg:border-b-0 lg:border-r lg:px-[clamp(28px,5vw,72px)] lg:py-12">
+        <div><Logo size={30} text="text-[16px]" /></div>
+        <div>
+          <h1 className="mb-4 max-w-[14ch] text-[clamp(34px,4.6vw,56px)] font-semibold leading-[1.04] tracking-[-0.035em]">
+            Every snippet you've ever needed.
           </h1>
-          <p className="mb-7 max-w-[46ch] text-base text-muted lg:text-[17px]">
+          <p className="mb-8 max-w-[46ch] text-[15px] leading-relaxed text-muted lg:text-[16px]">
             A private, realtime vault for the code you keep rewriting. Search it in a keystroke, copy it in another.
           </p>
-          <div className="hidden max-w-[480px] -rotate-1 lg:block">
+          <div className="hidden max-w-[480px] lg:block">
             <CodeBlock code={DEMO_CODE} lang="JavaScript" title="vault.js" />
           </div>
         </div>
-        <div className="relative hidden flex-wrap gap-x-[18px] gap-y-2 text-[13.5px] text-muted lg:flex">
+        <div className="hidden flex-wrap gap-x-[18px] gap-y-2 text-[13px] text-muted lg:flex">
           {["Realtime sync", "Works offline", "Installable app", "Private by default"].map((f) => (
-            <span key={f} className="inline-flex items-center gap-2"><Icon name="check" size={15} className="text-accent" />{f}</span>
+            <span key={f} className="inline-flex items-center gap-2"><Icon name="check" size={14} className="text-muted" />{f}</span>
           ))}
         </div>
       </section>
 
       <section className="grid place-items-center px-6 py-8">
         <form onSubmit={submit} className="w-full max-w-[380px]" noValidate>
-          <h2 className="mb-1.5 text-[28px] font-bold tracking-tight">{mode === "up" ? "Create your vault" : "Welcome back"}</h2>
+          <h2 className="mb-1.5 text-[26px] font-semibold tracking-[-0.02em]">{mode === "up" ? "Create your vault" : "Welcome back"}</h2>
           <p className="mb-6 text-muted">{mode === "up" ? "Use a password with 8 or more characters." : "Sign in to sync your snippets."}</p>
 
+          {isAndroidBrowser && (
+            <a href={ANDROID_APK_URL} download className="btn btn-lg btn-wide mb-4">
+              <Icon name="download" size={17} /> Download the Android app
+            </a>
+          )}
+          {/* The popup sign-in cannot run inside the Android WebView; email sign-in works there. */}
+          {!isNativeApp && (
           <button type="button" className="btn btn-lg btn-wide mb-4" onClick={google} disabled={busy || !online}>
             <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden>
               <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z" />
@@ -91,9 +97,12 @@ export function Login() {
             </svg>
             Continue with Google
           </button>
+          )}
+          {!isNativeApp && (
           <div className="mb-4 flex items-center gap-3 text-[12px] uppercase tracking-[.1em] text-faint">
             <span className="h-px flex-1 bg-line" />or<span className="h-px flex-1 bg-line" />
           </div>
+          )}
 
           <label className="mb-3.5 block"><span className="mb-1.5 block text-[12.5px] font-semibold text-muted">Email</span>
             <input className={input} type="email" autoComplete="email" inputMode="email" placeholder="you@example.com"
@@ -123,7 +132,7 @@ export function Login() {
             {busy ? "Please wait…" : mode === "up" ? "Create account" : "Sign in"}
           </button>
           {!online && <p className="mt-3 text-[13px] text-danger">You're offline — connect to the internet to sign in.</p>}
-          <p role="status" className={`mt-3.5 min-h-[22px] text-[13px] ${note.kind === "err" ? "text-danger" : note.kind === "ok" ? "text-accent" : "text-muted"}`}>{note.text}</p>
+          <p role="status" className={`mt-3.5 min-h-[22px] text-[13px] ${note.kind === "err" ? "text-danger" : note.kind === "ok" ? "text-ink" : "text-muted"}`}>{note.text}</p>
 
           <div className="flex items-center justify-between text-[13px]">
             <button type="button" className="link-btn" onClick={() => { setMode(mode === "in" ? "up" : "in"); setNote({ text: "" }); setPw2(""); }}>

@@ -86,7 +86,7 @@ export function fromBase64(b64: string): Uint8Array<ArrayBuffer> {
 }
 
 /** Best-effort wipe of sensitive bytes once they are no longer needed. */
-export function zero(bytes: Uint8Array): void {
+function zero(bytes: Uint8Array): void {
   bytes.fill(0);
 }
 
@@ -279,7 +279,7 @@ export function normalizeRecoveryKey(text: string): string | null {
 }
 
 /** Derive the AES key used to seal the recovery copy of the DEK (high-entropy input, so a plain hash suffices). */
-export async function recoveryKeyToAes(recoveryKey: string): Promise<CryptoKey> {
+async function recoveryKeyToAes(recoveryKey: string): Promise<CryptoKey> {
   const normalized = normalizeRecoveryKey(recoveryKey);
   if (!normalized) throw new Error("That recovery key doesn't look right.");
   const digest = await crypto.subtle.digest("SHA-256", utf8(normalized));

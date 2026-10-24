@@ -8,11 +8,11 @@ import {
 import { auth } from "../lib/firebase";
 import { wipeUserData } from "../lib/account";
 import { touchUserProfile } from "../lib/users";
-import { ADMIN_EMAIL, isAdminEmail } from "../lib/admin";
+import { isAdminEmail } from "../lib/admin";
 
 // The admin email lives in `lib/admin.ts` (single source of truth, kept in step with
 // `firestore.rules` by a test). Re-exported here so existing importers keep working.
-export { ADMIN_EMAIL, isAdminEmail };
+export { isAdminEmail };
 
 /** Dev-only demo: `npm run dev` + `?demo` opens the app with seeded data and no Firebase account. Never in production builds. */
 export const DEMO = import.meta.env.DEV && typeof location !== "undefined" && new URLSearchParams(location.search).has("demo");

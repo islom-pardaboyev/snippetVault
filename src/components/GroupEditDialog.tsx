@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Icon } from "./Icon";
 import type { GroupMeta } from "../lib/types";
 
-export const GROUP_COLORS = ["#c8f542", "#4fe0dc", "#5b9bd5", "#a597ff", "#ff7ab8", "#ff8a65", "#ffc83d", "#9ad5a0"];
+const GROUP_COLORS = ["#c8f542", "#4fe0dc", "#5b9bd5", "#a597ff", "#ff7ab8", "#ff8a65", "#ffc83d", "#9ad5a0"];
 const EMOJIS = ["📁", "🐍", "⚛️", "🌐", "🎨", "🗄️", "🖥️", "🧪", "🚀", "📚", "🔧", "⭐"];
 
 export function GroupEditDialog({ open, name, meta, onClose, onSave }: {
@@ -20,7 +20,7 @@ export function GroupEditDialog({ open, name, meta, onClose, onSave }: {
     if (!open && d.open) d.close();
   }, [open, name, meta.color, meta.emoji]);
 
-  const input = "w-full rounded-[10px] border border-line bg-surface-2 px-3 py-3 outline-none transition placeholder:text-faint focus:border-accent focus:ring-[3px] focus:ring-accent/20";
+  const input = "field";
 
   return (
     <dialog ref={ref} onClose={onClose} onClick={(e) => { if (e.target === ref.current) onClose(); }}
