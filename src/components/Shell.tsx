@@ -107,7 +107,7 @@ export function Shell() {
           <Icon name="wifioff" size={16} /> You're offline — your vault still works and changes sync when you're back.
         </div>
       )}
-      <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-line bg-bg/90 px-3 backdrop-blur-xl md:h-[60px] md:gap-3 md:px-[18px]">
+      <header className="sticky top-[var(--inset-top)] z-20 flex h-14 items-center gap-2 border-b border-line bg-bg/90 px-3 backdrop-blur-xl md:h-[60px] md:gap-3 md:px-[18px]">
         <NavLink to="/" aria-label="SnippetVault home" className="shrink-0 md:mr-2">
           <span className="md:hidden"><LogoMark size={30} /></span>
           <span className="hidden md:block"><Logo /></span>
@@ -246,7 +246,7 @@ export function Shell() {
         </main>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-bg/90 px-1.5 pb-[calc(6px+env(safe-area-inset-bottom))] pt-1.5 backdrop-blur-xl md:hidden" aria-label="Primary">
+      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-bg/90 px-1.5 pb-[calc(6px+var(--inset-bottom))] pt-1.5 backdrop-blur-xl md:hidden" aria-label="Primary">
         <MobTab to="/" icon="library" label="Library" end />
         <MobTab to="/favorites" icon="star" label="Favourites" />
         <button onClick={() => nav("/new")} aria-label="New snippet" className="flex flex-col items-center gap-0.5 py-1 text-[11px] font-semibold text-accent-ink">
