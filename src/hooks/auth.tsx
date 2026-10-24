@@ -3,9 +3,11 @@ import {
   onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
   signOut, sendPasswordResetEmail, sendEmailVerification, updatePassword,
   reauthenticateWithCredential, reauthenticateWithPopup, deleteUser,
-  EmailAuthProvider, GoogleAuthProvider, signInWithPopup, type User,
+  EmailAuthProvider, GoogleAuthProvider, signInWithPopup, signInWithCredential, type User,
 } from "firebase/auth";
 import { auth } from "../lib/firebase";
+import { isNativeApp } from "../lib/native";
+import { FirebaseAuthentication } from "@capacitor-firebase/authentication";
 import { wipeUserData } from "../lib/account";
 import { touchUserProfile } from "../lib/users";
 import { isAdminEmail } from "../lib/admin";
@@ -53,6 +55,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sendEmailVerification(cred.user).catch(() => undefined);
   }, []);
   const signInWithGoogle = useCallback(async () => {
+    if (isNativeApp) {
+      // The Android WebView cannot open the popup, so Google's native account picker returns an
+      // ID token instead, which the Firebase JS SDK turns into the same signed-in user.
+      const result = await FirebaseAuthentication.signInWithGoogle();
+      const idToken = result.credential?.idToken;
+      if (!idToken) throw new Error("No Google ID token returned");
+      await signInWithCredential(auth, GoogleAuthProvider.credential(idToken));
+      return;
+    }
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: "select_account" });
     await signInWithPopup(auth, provider);

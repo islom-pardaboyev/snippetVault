@@ -6,7 +6,7 @@ import { Logo } from "../components/Logo";
 import { Icon } from "../components/Icon";
 import { CodeBlock } from "../components/CodeBlock";
 import { PwMeter, passwordValid } from "../components/PwMeter";
-import { ANDROID_APK_PUBLISHED, ANDROID_APK_URL, isAndroidBrowser, isNativeApp } from "../lib/native";
+import { ANDROID_APK_PUBLISHED, ANDROID_APK_URL, isAndroidBrowser } from "../lib/native";
 
 const DEMO_CODE = `const vault = await snippets.search("debounce");
 
@@ -41,12 +41,6 @@ export function Login() {
     }
   };
   const google = async () => {
-    // Inside the Android app the popup cannot open; Google sign-in there needs the native
-    // Firebase setup. Say so instead of failing silently.
-    if (isNativeApp) {
-      setNote({ text: "Google sign-in in the app is still being set up. Use your email for now.", kind: "err" });
-      return;
-    }
     setBusy(true);
     setNote({ text: "Opening Google…" });
     try { await signInWithGoogle(); }

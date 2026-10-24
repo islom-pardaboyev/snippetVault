@@ -11,6 +11,18 @@ const config: CapacitorConfig = {
   android: {
     minWebViewVersion: 105,
   },
+  plugins: {
+    // Android 15+ draws the app edge-to-edge. Let Capacitor pad the WebView natively so the
+    // status bar never covers the page, and the bottom bar clears the gesture area.
+    SystemBars: {
+      insetsHandling: "native",
+    },
+    // Native Google sign-in; the credential is handed to the Firebase JS SDK (see hooks/auth.tsx).
+    FirebaseAuthentication: {
+      skipNativeAuth: true,
+      providers: ["google.com"],
+    },
+  },
 };
 
 export default config;
