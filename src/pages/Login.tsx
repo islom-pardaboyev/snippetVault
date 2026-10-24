@@ -6,7 +6,7 @@ import { Logo } from "../components/Logo";
 import { Icon } from "../components/Icon";
 import { CodeBlock } from "../components/CodeBlock";
 import { PwMeter, passwordValid } from "../components/PwMeter";
-import { ANDROID_APK_URL, isAndroidBrowser, isNativeApp } from "../lib/native";
+import { ANDROID_APK_PUBLISHED, ANDROID_APK_URL, isAndroidBrowser, isNativeApp } from "../lib/native";
 
 const DEMO_CODE = `const vault = await snippets.search("debounce");
 
@@ -81,7 +81,7 @@ export function Login() {
           <h2 className="mb-1.5 text-[26px] font-semibold tracking-[-0.02em]">{mode === "up" ? "Create your vault" : "Welcome back"}</h2>
           <p className="mb-6 text-muted">{mode === "up" ? "Use a password with 8 or more characters." : "Sign in to sync your snippets."}</p>
 
-          {isAndroidBrowser && (
+          {isAndroidBrowser && ANDROID_APK_PUBLISHED && (
             <a href={ANDROID_APK_URL} download className="btn btn-lg btn-wide mb-4">
               <Icon name="download" size={17} /> Download the Android app
             </a>

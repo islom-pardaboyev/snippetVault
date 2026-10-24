@@ -8,3 +8,9 @@ export const isAndroidBrowser = !isNativeApp && typeof navigator !== "undefined"
 
 /** Where the Android build is served from the website (copied into `public/`). */
 export const ANDROID_APK_URL = "/snippetvault.apk";
+
+/**
+ * Flip to true only after a signed APK is copied to `public/snippetvault.apk`. Until then the
+ * site's SPA rewrite answers that URL with index.html, so the button would save an HTML page.
+ */
+export const ANDROID_APK_PUBLISHED = true;
