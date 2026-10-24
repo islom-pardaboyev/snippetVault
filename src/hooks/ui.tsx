@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { ThemeMode } from "../lib/types";
 import { Icon } from "../components/Icon";
+import { syncStatusBar } from "../lib/native";
 
 /* ---------- online status ---------- */
 export function useOnline() {
@@ -53,6 +54,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     root.dataset.theme = theme;
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", isLight ? LIGHT_BG : DARK_BG);
     try { localStorage.setItem(THEME_KEY, theme); } catch { /* private mode */ }
+    syncStatusBar(isLight);
     if (firstApply.current) firstApply.current = false;
     else {
       root.classList.add("theme-anim");

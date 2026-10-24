@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Icon, type IconName } from "./Icon";
-import { Logo } from "./Logo";
+import { Logo, LogoMark } from "./Logo";
 import { CommandPalette } from "./CommandPalette";
 import { AccountMenu } from "./AccountMenu";
 import { SettingsDialog } from "./SettingsDialog";
@@ -107,9 +107,12 @@ export function Shell() {
           <Icon name="wifioff" size={16} /> You're offline — your vault still works and changes sync when you're back.
         </div>
       )}
-      <header className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-line bg-bg/80 px-3.5 py-2.5 backdrop-blur-xl backdrop-saturate-150 md:flex-nowrap md:px-[18px]">
-        <NavLink to="/" className="mr-2"><Logo /></NavLink>
-        <label className="relative order-3 basis-full md:order-none md:max-w-[460px] md:flex-1 md:basis-auto">
+      <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-line bg-bg/90 px-3 backdrop-blur-xl md:h-[60px] md:gap-3 md:px-[18px]">
+        <NavLink to="/" aria-label="SnippetVault home" className="shrink-0 md:mr-2">
+          <span className="md:hidden"><LogoMark size={30} /></span>
+          <span className="hidden md:block"><Logo /></span>
+        </NavLink>
+        <label className="relative min-w-0 flex-1 md:max-w-[460px]">
           <span className="sr-only">Search snippets</span>
           <Icon name="search" className="absolute left-3 top-[10px] text-faint" />
           <input ref={searchRef} type="search" value={q} onChange={(e) => onSearch(e.target.value)}
@@ -142,9 +145,9 @@ export function Shell() {
             </div>
           )}
         </label>
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1 md:ml-auto md:gap-1.5">
           <span data-s={sync} title={`Sync status: ${SYNC_LABEL[sync]}`}
-            className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-2.5 py-1 text-[12.5px] text-muted">
+            className="inline-flex items-center gap-2 px-1 text-[12.5px] text-muted md:rounded-full md:border md:border-line md:bg-surface md:px-2.5 md:py-1">
             <span className={`size-[7px] rounded-full ${sync === "offline" ? "bg-danger" : "bg-accent"} ${sync === "syncing" ? "animate-[pulse-dot_1s_infinite]" : ""}`} />
             <span className="hidden md:inline">{SYNC_LABEL[sync]}</span>
           </span>
