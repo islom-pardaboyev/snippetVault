@@ -51,9 +51,11 @@
 }
 
 @layer base {
+  /* Status bar height on Android (set by Capacitor), or the notch on iOS; 0 in a browser. */
+  :root { --inset-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px)); --inset-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)); }
   html { -webkit-text-size-adjust: 100%; scrollbar-gutter: stable; }
   body {
-    background: var(--bg); color: var(--text);
+    background: var(--bg); color: var(--text); padding-top: var(--inset-top);
     font-family: var(--font-sans); font-size: 14.5px; line-height: 1.55;
     font-feature-settings: "cv11", "ss01";
     -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;

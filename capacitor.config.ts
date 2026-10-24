@@ -12,10 +12,10 @@ const config: CapacitorConfig = {
     minWebViewVersion: 105,
   },
   plugins: {
-    // Android 15+ draws the app edge-to-edge. Let Capacitor pad the WebView natively so the
-    // status bar never covers the page, and the bottom bar clears the gesture area.
+    // Android 15+ draws the app edge-to-edge. Capacitor reports the system-bar sizes as CSS
+    // variables (--safe-area-inset-top/bottom), and the header and bottom bar use them.
     SystemBars: {
-      insetsHandling: "native",
+      insetsHandling: "css",
     },
     // Native Google sign-in; the credential is handed to the Firebase JS SDK (see hooks/auth.tsx).
     FirebaseAuthentication: {
