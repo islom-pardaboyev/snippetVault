@@ -67,7 +67,7 @@ const Ctx = createContext<VaultCtx | null>(null);
 
 export function VaultProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const { snippets, save, remove } = useSnippets();
+  const { snippets, save, purge } = useSnippets();
   const uid = user?.uid ?? null;
   const available = !DEMO && !!uid;
 
@@ -190,8 +190,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     if (plain.length) await deleteSnippetImages(uid, s.id);
     await deleteSnippetVersions(uid, s.id);
     if (s.share_token) await revokeShare(s.share_token);
-    remove(s.id);
-  }, [uid, remove]);
+    // Permanent, not the Trash: a plaintext copy waiting in the Trash would defeat the vault.
+    purge(s.id);
+  }, [uid, purge]);
 
   const moveGroupIn = useCallback(async (group: string) => {
     const inGroup = snippets.filter((s) => s.group === group);

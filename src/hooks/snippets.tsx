@@ -1,20 +1,31 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
-  collection, deleteDoc, doc, getDocs, limit, onSnapshot, orderBy, query, setDoc, writeBatch,
+  collection, deleteDoc, deleteField, doc, getDocs, limit, onSnapshot, orderBy, query, setDoc, updateDoc, writeBatch,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { DEMO, useAuth } from "./auth";
 import { useOnline, useToast } from "./ui";
 import type { GroupMeta, Snippet, SyncState, Version } from "../lib/types";
 import { newId, seedSnippets } from "../lib/utils";
+import { revokeShare } from "../lib/share";
+import { isExpired } from "../lib/trash";
 
 interface SnippetsCtx {
+  /** Snippets that are not in the Trash. */
   snippets: Snippet[];
+  /** Snippets in the Trash, most recently deleted first. */
+  trashed: Snippet[];
   loaded: boolean;
   sync: SyncState;
   get(id: string): Snippet | undefined;
   save(s: Snippet): void;
+  /** Moves a snippet to the Trash (it can be restored for 30 days). */
   remove(id: string): void;
+  /** Takes snippets out of the Trash. */
+  restore(ids: string | string[]): void;
+  /** Deletes snippets permanently, along with their images, history and share link. */
+  purge(ids: string | string[]): void;
+  emptyTrash(): void;
   saveMany(list: Snippet[]): Promise<void>;
   groups: string[];
   groupMeta: Record<string, GroupMeta>;
@@ -53,27 +64,34 @@ export function SnippetsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const online = useOnline();
   const toast = useToast();
-  const [snippets, setSnippets] = useState<Snippet[]>([]);
+  const [all, setAll] = useState<Snippet[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [meta, setMeta] = useState<Record<string, GroupMeta>>({});
   const [explicit, setExplicit] = useState<string[]>([]);
   const [pending, setPending] = useState(false);
   const [fromCache, setFromCache] = useState(true);
   const uid = user?.uid ?? null;
-  const imgDelete = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const snippets = useMemo(() => all.filter((s) => !s.deleted_at), [all]);
+  const trashed = useMemo(
+    () => all.filter((s) => s.deleted_at).sort((a, b) => (b.deleted_at ?? "").localeCompare(a.deleted_at ?? "")),
+    [all],
+  );
   const snapshots = useRef(snippets);
   snapshots.current = snippets;
+  const allRef = useRef(all);
+  allRef.current = all;
+  const purging = useRef(new Set<string>());
 
   /* cloud: realtime snippets */
   useEffect(() => {
-    if (DEMO) { setSnippets(seedSnippets()); setLoaded(true); return; }
-    if (!uid) { setSnippets([]); setLoaded(false); return; }
+    if (DEMO) { setAll(seedSnippets()); setLoaded(true); return; }
+    if (!uid) { setAll([]); setLoaded(false); return; }
     setLoaded(false);
     return onSnapshot(
       collection(db, "users", uid, "snippets"),
       { includeMetadataChanges: true },
       (snap) => {
-        setSnippets(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Snippet, "id">) })));
+        setAll(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Snippet, "id">) })));
         setPending(snap.metadata.hasPendingWrites);
         setFromCache(snap.metadata.fromCache);
         setLoaded(true);
@@ -109,9 +127,7 @@ export function SnippetsProvider({ children }: { children: ReactNode }) {
 
   /* ---- snippets ---- */
   const save = useCallback((s: Snippet) => {
-    const t = imgDelete.current.get(s.id);
-    if (t) { clearTimeout(t); imgDelete.current.delete(s.id); } // snippet restored (Undo)
-    setSnippets((l) => {
+    setAll((l) => {
       const i = l.findIndex((x) => x.id === s.id);
       if (i === -1) return [...l, s];
       const next = l.slice();
@@ -125,25 +141,73 @@ export function SnippetsProvider({ children }: { children: ReactNode }) {
   }, [uid, fail]);
 
   const remove = useCallback((id: string) => {
-    setSnippets((l) => l.filter((x) => x.id !== id));
+    const now = new Date().toISOString();
+    const token = allRef.current.find((x) => x.id === id)?.share_token;
+    setAll((l) => l.map((x) => {
+      if (x.id !== id) return x;
+      const { share_token: _shared, ...rest } = x;
+      return { ...rest, deleted_at: now };
+    }));
     if (!uid) return;
-    deleteDoc(doc(db, "users", uid, "snippets", id)).catch(fail);
-    // Wait out the Undo window, then remove the orphaned sub-collections. If the snippet comes
-    // back (Undo / restore) `save` clears this timer and the images and history are kept.
-    const t = setTimeout(() => {
-      imgDelete.current.delete(id);
-      deleteSubcollections(uid, id).catch(fail);
-    }, 8000);
-    imgDelete.current.set(id, t);
+    // Soft delete: the document, its images and its history stay, so Restore brings back everything.
+    // A deleted snippet is no longer shared, so the public link goes down right away.
+    updateDoc(doc(db, "users", uid, "snippets", id), { deleted_at: now, ...(token ? { share_token: deleteField() } : {}) }).catch(fail);
+    if (token) revokeShare(token).catch(() => undefined);
   }, [uid, fail]);
 
-  const saveMany = useCallback(async (list: Snippet[]) => {
-    // Restoring via Undo: cancel any pending sub-collection cleanup for these ids.
-    list.forEach((s) => {
-      const t = imgDelete.current.get(s.id);
-      if (t) { clearTimeout(t); imgDelete.current.delete(s.id); }
+  const restore = useCallback((input: string | string[]) => {
+    const ids = new Set(Array.isArray(input) ? input : [input]);
+    setAll((l) => l.map((x) => {
+      if (!ids.has(x.id)) return x;
+      const { deleted_at: _gone, ...rest } = x;
+      return rest;
+    }));
+    if (!uid) return;
+    const list = [...ids];
+    for (let i = 0; i < list.length; i += 400) {
+      const batch = writeBatch(db);
+      list.slice(i, i + 400).forEach((id) => batch.update(doc(db, "users", uid, "snippets", id), { deleted_at: deleteField() }));
+      batch.commit().catch(fail);
+    }
+  }, [uid, fail]);
+
+  const purge = useCallback((input: string | string[]) => {
+    const ids = new Set(Array.isArray(input) ? input : [input]);
+    const doomed = allRef.current.filter((x) => ids.has(x.id));
+    setAll((l) => l.filter((x) => !ids.has(x.id)));
+    if (!uid) return;
+    doomed.forEach((s) => {
+      deleteDoc(doc(db, "users", uid, "snippets", s.id)).catch(fail);
+      // Firestore never cascades: remove the images and version history explicitly, and take the
+      // public share link down too, so no copy of the code outlives the snippet.
+      deleteSubcollections(uid, s.id).catch(fail);
+      if (s.share_token) revokeShare(s.share_token).catch(() => undefined);
     });
-    setSnippets((l) => {
+  }, [uid, fail]);
+
+  const emptyTrash = useCallback(() => {
+    purge(allRef.current.filter((x) => x.deleted_at).map((x) => x.id));
+  }, [purge]);
+
+  /* Anything that has sat in the Trash for the full retention period is deleted for good. This runs
+     whenever the data loads or changes, so it needs no server job: it happens the next time the app
+     is opened after the deadline. */
+  const [hour, setHour] = useState(0);
+  useEffect(() => {
+    const t = window.setInterval(() => setHour((h) => h + 1), 3_600_000); // re-check in a tab left open
+    return () => window.clearInterval(t);
+  }, []);
+  useEffect(() => {
+    if (!loaded) return;
+    const now = Date.now();
+    const expired = trashed.filter((s) => s.deleted_at && isExpired(s.deleted_at, now) && !purging.current.has(s.id));
+    if (!expired.length) return;
+    expired.forEach((s) => purging.current.add(s.id));
+    purge(expired.map((s) => s.id));
+  }, [loaded, trashed, purge, hour]);
+
+  const saveMany = useCallback(async (list: Snippet[]) => {
+    setAll((l) => {
       const m = new Map(l.map((x) => [x.id, x]));
       list.forEach((s) => m.set(s.id, s));
       return [...m.values()];
@@ -185,7 +249,7 @@ export function SnippetsProvider({ children }: { children: ReactNode }) {
     setMeta((m) => { const { [name]: _drop, ...rest } = m; return rest; });
     const now = new Date().toISOString();
     const moved = snapshots.current.filter((x) => x.group === name).map((x) => ({ ...x, group: "", updated_at: now }));
-    setSnippets((l) => l.map((x) => (x.group === name ? { ...x, group: "", updated_at: now } : x)));
+    setAll((l) => l.map((x) => (x.group === name && !x.deleted_at ? { ...x, group: "", updated_at: now } : x)));
     if (!uid) return;
     deleteDoc(doc(db, "users", uid, "groups", gid(name))).catch(fail);
     moved.forEach(({ id, ...data }) => setDoc(doc(db, "users", uid, "snippets", id), data).catch(fail));
@@ -198,22 +262,27 @@ export function SnippetsProvider({ children }: { children: ReactNode }) {
     const affected = snapshots.current.filter((x) => x.group && set.has(x.group));
     setExplicit((l) => l.filter((g) => !set.has(g)));
     setMeta((m) => Object.fromEntries(Object.entries(m).filter(([k]) => !set.has(k))));
-    setSnippets((l) => withSnippets
-      ? l.filter((x) => !(x.group && set.has(x.group)))
-      : l.map((x) => (x.group && set.has(x.group) ? { ...x, group: "", updated_at: now } : x)));
+    const inGroups = (x: Snippet) => !x.deleted_at && !!x.group && set.has(x.group);
+    // "Also delete the snippets" moves them to the Trash (keeping their group, so Restore puts them
+    // back where they were); otherwise they just lose the group.
+    setAll((l) => l.map((x) => {
+      if (!inGroups(x)) return x;
+      if (!withSnippets) return { ...x, group: "", updated_at: now };
+      const { share_token: _shared, ...rest } = x;
+      return { ...rest, deleted_at: now, updated_at: now };
+    }));
     if (!uid) return;
     const ops: Array<(b: ReturnType<typeof writeBatch>) => void> = [];
     names.forEach((n) => ops.push((b) => b.delete(doc(db, "users", uid, "groups", gid(n)))));
     affected.forEach(({ id, ...data }) => ops.push((b) => withSnippets
-      ? b.delete(doc(db, "users", uid, "snippets", id))
+      ? b.update(doc(db, "users", uid, "snippets", id), { deleted_at: now, updated_at: now, ...(data.share_token ? { share_token: deleteField() } : {}) })
       : b.set(doc(db, "users", uid, "snippets", id), { ...data, group: "", updated_at: now })));
+    if (withSnippets) affected.forEach((x) => { if (x.share_token) revokeShare(x.share_token).catch(() => undefined); });
     for (let i = 0; i < ops.length; i += 400) {
       const batch = writeBatch(db);
       ops.slice(i, i + 400).forEach((op) => op(batch));
       batch.commit().catch(fail);
     }
-    // Deleting the snippet documents is not enough: clear their images and version history too.
-    if (withSnippets) affected.forEach(({ id }) => { deleteSubcollections(uid, id).catch(fail); });
   }, [uid, fail]);
 
   const renameGroup = useCallback((from: string, to: string) => {
@@ -224,7 +293,7 @@ export function SnippetsProvider({ children }: { children: ReactNode }) {
     setMeta((m) => { const { [from]: _drop, ...rest } = m; return { ...rest, [n]: carried }; });
     const now = new Date().toISOString();
     const moved = snapshots.current.filter((x) => x.group === from).map((x) => ({ ...x, group: n, updated_at: now }));
-    setSnippets((l) => l.map((x) => (x.group === from ? { ...x, group: n, updated_at: now } : x)));
+    setAll((l) => l.map((x) => (x.group === from && !x.deleted_at ? { ...x, group: n, updated_at: now } : x)));
     if (!uid) return;
     deleteDoc(doc(db, "users", uid, "groups", gid(from))).catch(fail);
     writeGroupDoc(n, carried);
@@ -254,11 +323,11 @@ export function SnippetsProvider({ children }: { children: ReactNode }) {
   const byId = useMemo(() => new Map(snippets.map((s) => [s.id, s])), [snippets]);
 
   const value = useMemo<SnippetsCtx>(() => ({
-    snippets, loaded, sync, save, remove, saveMany,
+    snippets, trashed, loaded, sync, save, remove, restore, purge, emptyTrash, saveMany,
     groups, groupMeta: meta, addGroup, renameGroup, deleteGroup, deleteGroups, updateGroup,
     saveVersion, listVersions,
     get: (id) => byId.get(id),
-  }), [snippets, byId, loaded, sync, save, remove, saveMany, groups, meta, addGroup, renameGroup, deleteGroup, deleteGroups, updateGroup, saveVersion, listVersions]);
+  }), [snippets, trashed, byId, loaded, sync, save, remove, restore, purge, emptyTrash, saveMany, groups, meta, addGroup, renameGroup, deleteGroup, deleteGroups, updateGroup, saveVersion, listVersions]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

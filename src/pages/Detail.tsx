@@ -26,7 +26,7 @@ import { copyText, downloadFile, isPage, lineCount, newId, snippetFilename, time
 
 export function Detail() {
   const { id = "" } = useParams();
-  const { get, loaded, snippets, save, remove, groups: groupNames, addGroup } = useSnippets();
+  const { get, loaded, snippets, save, remove, restore, groups: groupNames, addGroup } = useSnippets();
   const nav = useNavigate();
   const toast = useToast();
   const { prompt, confirm } = useModal();
@@ -69,10 +69,10 @@ export function Detail() {
 
   const del = () => {
     if (!s) return;
-    const backup = s;
-    remove(s.id);
+    const id = s.id;
+    remove(id);
     nav("/", { replace: true });
-    toast("Snippet deleted", { action: { label: "Undo", run: () => save(backup) }, ms: 6000 });
+    toast("Moved to Trash", { action: { label: "Undo", run: () => restore(id) }, ms: 6000 });
   };
 
   const toVault = async () => {
@@ -173,7 +173,7 @@ export function Detail() {
             onClick={() => { const n = { ...s, id: newId(), title: s.title + " (copy)", favorite: false, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }; save(n); nav(`/s/${n.id}`); toast("Duplicated"); }}>
             <Icon name="sparkles" size={16} />
           </button>
-          <button className="btn btn-icon btn-danger" aria-label="Delete" title="Delete" onClick={del}><Icon name="trash" size={16} /></button>
+          <button className="btn btn-icon btn-danger" aria-label="Move to Trash" title="Move to Trash" onClick={del}><Icon name="trash" size={16} /></button>
         </div>
       </div>
 

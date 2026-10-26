@@ -160,8 +160,8 @@ export function Groups() {
             <label className={`mt-4 flex cursor-pointer items-start gap-3 rounded-xl border p-3 ${withSnippets ? "border-danger bg-danger/10" : "border-line"}`}>
               <input type="checkbox" className="mt-1 size-4 accent-[#ff6b6b]" checked={withSnippets} onChange={(e) => setWithSnippets(e.target.checked)} />
               <span>
-                <b className="block text-sm">Also delete the {pickedSnippets} snippet{pickedSnippets === 1 ? "" : "s"} inside</b>
-                <span className="text-[13px] text-muted">This can't be undone.</span>
+                <b className="block text-sm">Also move the {pickedSnippets} snippet{pickedSnippets === 1 ? "" : "s"} inside to the Trash</b>
+                <span className="text-[13px] text-muted">You can restore them from the Trash for 30 days.</span>
               </span>
             </label>
           )}

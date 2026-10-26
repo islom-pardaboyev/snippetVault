@@ -35,6 +35,7 @@ export function CommandPalette({ open, onClose, onSettings }: { open: boolean; o
       { id: "a-lib", section: "Actions", label: "All snippets", icon: "library", run: go("/") },
       { id: "a-fav", section: "Actions", label: "Favourites", icon: "star", run: go("/favorites") },
       { id: "a-ins", section: "Actions", label: "Insights", icon: "chart", run: go("/insights") },
+      { id: "a-trash", section: "Actions", label: "Trash", icon: "trash", run: go("/trash") },
       { id: "a-theme", section: "Actions", label: "Toggle light / dark  (D)", icon: "sun", run: toggleTheme },
       { id: "a-set", section: "Actions", label: "Settings", icon: "sliders", run: onSettings },
     ];

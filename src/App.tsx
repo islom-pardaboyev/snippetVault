@@ -19,6 +19,7 @@ const Login = lazy(() => import("./pages/Login").then((m) => ({ default: m.Login
 const Groups = lazy(() => import("./pages/Groups").then((m) => ({ default: m.Groups })));
 const SharedSnippets = lazy(() => import("./pages/SharedSnippets").then((m) => ({ default: m.SharedSnippets })));
 const Admin = lazy(() => import("./pages/Admin").then((m) => ({ default: m.Admin })));
+const Trash = lazy(() => import("./pages/Trash").then((m) => ({ default: m.Trash })));
 const Shared = lazy(() => import("./pages/Shared").then((m) => ({ default: m.Shared })));
 const VaultPage = lazy(() => import("./pages/Vault").then((m) => ({ default: m.Vault })));
 const VaultDetailPage = lazy(() => import("./pages/Vault").then((m) => ({ default: m.VaultDetail })));
@@ -39,7 +40,7 @@ function Splash() {
 }
 
 /** Paths a signed-out visitor may open: anything else is a real 404. Keep in step with the routes below. */
-const KNOWN_APP_PATH = /^\/($|favorites$|insights$|groups$|shared$|vault$|vault\/[^/]+$|new$|lang\/[^/]+$|tag\/[^/]+$|group\/[^/]+$|s\/[^/]+(\/edit)?$|admin$)/;
+const KNOWN_APP_PATH = /^\/($|favorites$|insights$|groups$|shared$|trash$|vault$|vault\/[^/]+$|new$|lang\/[^/]+$|tag\/[^/]+$|group\/[^/]+$|s\/[^/]+(\/edit)?$|admin$)/;
 
 function Gate() {
   const { status } = useAuth();
@@ -70,6 +71,7 @@ function Gate() {
             <Route path="tag/:tag" element={<Library mode="tag" />} />
             <Route path="groups" element={<Page C={Groups} />} />
             <Route path="shared" element={<Page C={SharedSnippets} />} />
+            <Route path="trash" element={<Page C={Trash} />} />
             <Route path="vault" element={<Page C={VaultPage} />} />
             <Route path="vault/:id" element={<Page C={VaultDetailPage} />} />
             <Route path="group/:group" element={<Library mode="group" />} />
