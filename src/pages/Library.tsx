@@ -22,7 +22,7 @@ const SORTS: [Sort, string][] = [["updated", "Updated"], ["created", "Newest"], 
 const pref = (k: string, d: string) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
 
 export function Library({ mode }: { mode: "all" | "favorites" | "lang" | "tag" | "group" }) {
-  const { snippets, loaded, saveMany, remove, groupMeta, renameGroup, deleteGroup, updateGroup } = useSnippets();
+  const { snippets, loaded, saveMany, remove, restore, groupMeta, renameGroup, deleteGroup, updateGroup } = useSnippets();
   const { available: vaultAvailable, status: vaultStatus, entries: vaultEntries, moveGroupIn } = useVault();
   const [editGroup, setEditGroup] = useState(false);
   const [addExisting, setAddExisting] = useState(false);
@@ -124,11 +124,11 @@ export function Library({ mode }: { mode: "all" | "favorites" | "lang" | "tag" |
   const deleteChosen = async () => {
     const items = chosen;
     if (!items.length) return;
-    const ok = await confirm({ title: `Delete ${items.length} snippet${items.length > 1 ? "s" : ""}?`, description: "This removes them from your vault.", confirmLabel: "Delete", danger: true });
+    const ok = await confirm({ title: `Delete ${items.length} snippet${items.length > 1 ? "s" : ""}?`, description: "They move to the Trash and are deleted for good after 30 days.", confirmLabel: "Move to Trash", danger: true });
     if (!ok) return;
     items.forEach((s) => remove(s.id));
     exitSelect();
-    toast(`${items.length} snippet${items.length > 1 ? "s" : ""} deleted`, { action: { label: "Undo", run: () => { void saveMany(items); } } });
+    toast(`${items.length} snippet${items.length > 1 ? "s" : ""} moved to Trash`, { action: { label: "Undo", run: () => restore(items.map((x) => x.id)) } });
   };
   const removeFromGroup = () => {
     const now = new Date().toISOString();

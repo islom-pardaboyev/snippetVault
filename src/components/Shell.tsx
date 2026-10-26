@@ -23,7 +23,7 @@ export function Shell() {
   const [verifyHidden, setVerifyHidden] = useState(false);
   const loc = useLocation();
   const online = useOnline();
-  const { snippets, sync, groups: allGroupNames, groupMeta, save } = useSnippets();
+  const { snippets, trashed, sync, groups: allGroupNames, groupMeta, save } = useSnippets();
   const { items: vaultItems, status: vaultStatus, available: vaultAvailable, lock: lockVault } = useVault();
   const [dropOn, setDropOn] = useState<string | null>(null);
   const toast = useToast();
@@ -87,7 +87,7 @@ export function Shell() {
   }, [snippets, allGroupNames]);
   const favs = snippets.filter((s) => s.favorite).length;
   const sharedCount = snippets.filter((s) => s.share_token).length + Object.values(groupMeta).filter((m) => m.share_token).length;
-  const moreActive = ["/vault", "/shared", "/insights"].some((p) => loc.pathname === p || loc.pathname.startsWith(`${p}/`));
+  const moreActive = ["/vault", "/shared", "/trash", "/insights"].some((p) => loc.pathname === p || loc.pathname.startsWith(`${p}/`));
 
   const item = "relative flex w-full items-center gap-2.5 rounded-[9px] px-2.5 py-2 text-left text-sm font-medium text-muted transition hover:bg-surface-2 hover:text-ink";
   const active = "!bg-accent/15 !text-ink font-bold before:absolute before:-left-3 before:top-2 before:bottom-2 before:w-[3px] before:rounded-r before:bg-accent before:content-['']";
@@ -193,6 +193,9 @@ export function Shell() {
             <NavLink to="/insights" className={({ isActive }) => `${item} ${isActive ? active : ""}`}>
               <Icon name="chart" size={17} /><span className="flex-1">Insights</span>
             </NavLink>
+            <NavLink to="/trash" className={({ isActive }) => `${item} ${isActive ? active : ""}`}>
+              <Icon name="trash" size={17} /><span className="flex-1">Trash</span>{trashed.length > 0 && <Count n={trashed.length} />}
+            </NavLink>
           </SideGroup>
           <SideGroup title="Groups" action={
             <button aria-label="New group" title="New group" className="grid size-6 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-ink"
@@ -260,7 +263,7 @@ export function Shell() {
       </nav>
 
       <MoreSheet open={more} onClose={() => setMore(false)} onSettings={() => setSettings(true)}
-        vaultAvailable={vaultAvailable} vaultUnlocked={vaultStatus === "unlocked"} vaultCount={vaultItems.length} sharedCount={sharedCount} />
+        vaultAvailable={vaultAvailable} vaultUnlocked={vaultStatus === "unlocked"} vaultCount={vaultItems.length} sharedCount={sharedCount} trashCount={trashed.length} />
 
       <CommandPalette open={palette} onClose={() => setPalette(false)} onSettings={() => setSettings(true)} />
       <SettingsDialog open={settings} onClose={() => setSettings(false)} />
@@ -297,9 +300,9 @@ function SheetRow({ icon, label, count, onClick }: { icon: IconName; label: stri
   );
 }
 
-function MoreSheet({ open, onClose, onSettings, vaultAvailable, vaultUnlocked, vaultCount, sharedCount }: {
+function MoreSheet({ open, onClose, onSettings, vaultAvailable, vaultUnlocked, vaultCount, sharedCount, trashCount }: {
   open: boolean; onClose(): void; onSettings(): void;
-  vaultAvailable: boolean; vaultUnlocked: boolean; vaultCount: number; sharedCount: number;
+  vaultAvailable: boolean; vaultUnlocked: boolean; vaultCount: number; sharedCount: number; trashCount: number;
 }) {
   const nav = useNavigate();
   if (!open) return null;
@@ -319,6 +322,7 @@ function MoreSheet({ open, onClose, onSettings, vaultAvailable, vaultUnlocked, v
           )}
           <SheetRow icon="link" label="Shared snippets" count={sharedCount} onClick={() => go("/shared")} />
           <SheetRow icon="chart" label="Insights" onClick={() => go("/insights")} />
+          <SheetRow icon="trash" label="Trash" count={trashCount || undefined} onClick={() => go("/trash")} />
           <SheetRow icon="sliders" label="Settings" onClick={() => { onClose(); onSettings(); }} />
         </div>
       </div>

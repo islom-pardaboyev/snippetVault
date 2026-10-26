@@ -14,6 +14,8 @@ export interface Snippet {
   updated_at: string;
   /** Token of a read-only share link for this snippet, if one was created. */
   share_token?: string;
+  /** Set when the snippet is in the Trash (ISO time of deletion). Absent for a normal snippet. */
+  deleted_at?: string;
 }
 
 export type SyncState = "synced" | "syncing" | "offline";
