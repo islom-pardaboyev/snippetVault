@@ -1,10 +1,11 @@
 """Captures README screenshots and a demo GIF from the dev server in demo mode (?demo)."""
+import os
 import sys
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 from PIL import Image
 
-BASE = "http://localhost:5173"
+BASE = os.environ.get("BASE_URL", "http://localhost:5173")
 OUT = Path(__file__).resolve().parent.parent / "docs" / "screenshots"
 OUT.mkdir(parents=True, exist_ok=True)
 DEMO = "?demo=1"
@@ -33,6 +34,14 @@ with sync_playwright() as p:
     page.goto(BASE + "/s/s1" + DEMO)
     page.wait_for_timeout(800)
     shot(page, "detail")
+
+    # trash: move a snippet to the Trash, then open the Trash page (demo data lives in memory)
+    page.goto(BASE + "/s/s3" + DEMO)
+    page.wait_for_timeout(800)
+    page.get_by_role("button", name="Move to Trash").click()
+    page.get_by_role("link", name="Trash").first.click()
+    page.wait_for_selector("text=Deleted just now")
+    shot(page, "trash")
 
     page.goto(BASE + "/admin" + DEMO)
     page.wait_for_timeout(800)
