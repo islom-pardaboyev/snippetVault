@@ -3,6 +3,7 @@ import {
   clearSessionAt, loadAppLock, makeAppLock, readSessionAt, rehashCode, saveAppLock,
   shouldStartLocked, verifyCode, writeSessionAt, DEFAULT_AUTOLOCK_MS, type AppLockConfig,
 } from "../lib/applock";
+import { useAuth } from "./auth";
 
 interface AppLockCtx {
   /** True once the user has turned the app lock on (this device only). */
@@ -38,6 +39,18 @@ export function AppLockProvider({ children }: { children: ReactNode }) {
     clearSessionAt();
     setLocked(true);
   }, []);
+
+  /* Signing out wipes this device's code. It is the only way back in when the code is forgotten
+     (it can't be recovered), and it keeps the next person to sign in on this device from being
+     asked for someone else's code. */
+  const { status } = useAuth();
+  useEffect(() => {
+    if (status !== "out") return;
+    saveAppLock(null);
+    clearSessionAt();
+    setConfig(null);
+    setLocked(false);
+  }, [status]);
 
   /* While unlocked, keep the session marker fresh, lock again when the app returns from the
      background after the chosen window, and lock after the same period of inactivity in the

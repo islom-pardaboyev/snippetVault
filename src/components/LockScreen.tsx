@@ -100,7 +100,7 @@ export function LockScreen() {
           <div className="mt-3 rounded-xl border border-line bg-surface-2 p-4 text-[13px] text-muted">
             <p className="mb-2">
               The app code is stored <b className="text-ink">only on this device</b> and can't be recovered or emailed.
-              To remove it, sign out below and clear this site's data (or reinstall the app).
+              Signing out below removes it from this device — you can set a new one after you sign back in.
             </p>
             <button type="button" className="btn btn-danger btn-wide" onClick={() => logout()}>
               <Icon name="logout" size={16} /> Sign out
