@@ -4,6 +4,7 @@ import { Icon } from "../components/Icon";
 import { LangIcon } from "../components/LangIcon";
 import { CodeBlock } from "../components/CodeBlock";
 import { ImageGallery } from "../components/ImageGallery";
+import { AudioSection } from "../components/AudioSection";
 import { CopyMenu } from "../components/CopyMenu";
 import { useModal } from "../components/Modal";
 import { PwMeter, passwordValid } from "../components/PwMeter";
@@ -17,6 +18,7 @@ import { highlightLines } from "../lib/highlight";
 import { DecryptionError } from "../lib/crypto";
 import { hasImgbb } from "../lib/imgbb";
 import type { SnippetImage } from "../lib/types";
+import { moveOutBlocker } from "../lib/vault-audio";
 import type { VaultEntry } from "../lib/vault";
 
 const INPUT = "field";
@@ -29,7 +31,7 @@ const GALLERY_PAGE = 12;
 
 /** `/vault` — set up, unlock and browse the encrypted vault. */
 export function Vault() {
-  const { available, status, entries, items, gallery, lock } = useVault();
+  const { available, status, entries, items, gallery, audioGallery, lock } = useVault();
   const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
 
   if (!available) {
@@ -55,7 +57,8 @@ export function Vault() {
           </h1>
           <p className="mt-1 text-sm text-muted">
             {entries.length} locked item{entries.length === 1 ? "" : "s"}
-            {gallery.length > 0 && <> · {gallery.length} image{gallery.length === 1 ? "" : "s"}</>} ·
+            {gallery.length > 0 && <> · {gallery.length} image{gallery.length === 1 ? "" : "s"}</>}
+            {audioGallery.length > 0 && <> · {audioGallery.length} audio file{audioGallery.length === 1 ? "" : "s"}</>} ·
             {" "}decrypted only in this tab, never stored in the clear
           </p>
         </div>
@@ -63,7 +66,7 @@ export function Vault() {
       </div>
 
       {entries.length === 0 ? (
-        gallery.length === 0 ? (
+        gallery.length === 0 && audioGallery.length === 0 ? (
           <div className="rounded-3xl border border-dashed border-line-strong bg-surface px-5 py-[64px] text-center">
             <div className="mx-auto mb-[18px] grid size-[54px] place-items-center rounded-2xl bg-accent/15 text-accent"><Icon name="shield" size={26} /></div>
             <h2 className="mb-1.5 text-[22px] font-bold tracking-tight">Your vault is empty</h2>
@@ -79,7 +82,7 @@ export function Vault() {
           <div className="mb-5 rounded-2xl border border-dashed border-line-strong bg-surface px-5 py-7 text-center">
             <p className="text-muted">
               <b className="text-ink">No locked snippets yet.</b> Open any snippet and choose{" "}
-              <b className="text-ink">Move to Vault</b> to lock it away — your encrypted images live below.
+              <b className="text-ink">Move to Vault</b> to lock it away — your encrypted images and audio live below.
             </p>
           </div>
         )
@@ -89,6 +92,7 @@ export function Vault() {
         </div>
       )}
       <GallerySection />
+      <AudioSection itemId={null} title="Voice & music" />
       <SettingsFoot items={items.length} />
     </div>
   );
@@ -628,6 +632,8 @@ export function VaultDetail() {
   if (!entry) return <Card icon="shield" title="Not in the vault">This item isn't in your vault (it may have been moved out).</Card>;
 
   const out = async () => {
+    const blocked = moveOutBlocker(entry.audio_count);
+    if (blocked) { toast(blocked, { kind: "err" }); return; }
     if (!(await confirm({ title: "Move out of the vault?", description: "It becomes a normal snippet again, stored unencrypted. Only do this once the snippet no longer needs to be secret.", confirmLabel: "Move out" }))) return;
     setBusy(true);
     try { await moveOut(entry.id); toast("Moved out of the vault"); nav("/vault"); }
@@ -724,6 +730,7 @@ export function VaultDetail() {
           </button>
         )}
       </div>
+      <AudioSection itemId={entry.id} title="Voice & music" />
     </div>
   );
 }
