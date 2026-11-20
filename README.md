@@ -54,6 +54,7 @@ It runs as a **website**, an installable **PWA**, and a native **Android app** b
 - **Copy formats and code image.** A split copy button for raw code, Markdown, HTML, or title plus code, and export any block as a themed PNG.
 - **Run code in the browser.** JavaScript, TypeScript and Python (Pyodide) run in a sandboxed iframe and Web Worker with a timeout.
 - **Version history** with line diffs, **image attachments** (up to five per snippet), JSON import and export, and Markdown export.
+- **Image zoom.** Open an image to zoom it: pinch with two fingers, scroll or pinch a trackpad, double tap or double click, drag to move around, the on-screen buttons, or `+`, `-` and `0` on the keyboard.
 - **Trash.** Deleted snippets are kept for 30 days and can be restored. See [Trash](#trash).
 
 ### Privacy and sharing

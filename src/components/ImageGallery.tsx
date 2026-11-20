@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "./Icon";
+import { ZoomableImage } from "./ZoomableImage";
 import { MAX_IMAGES } from "../lib/images";
 
 interface GalleryImage { id: string; data: string; w: number; h: number; }
@@ -89,7 +90,7 @@ export function ImageGallery({ images, onAdd, onRemove, busy, hint, max = MAX_IM
         className="m-auto max-h-[94vh] w-[min(1100px,calc(100vw-20px))] overflow-hidden rounded-[20px] border border-line-strong bg-bg p-0 text-ink shadow-[0_40px_100px_-20px_rgba(0,0,0,.8)]">
         {cur && (
           <div className="relative grid place-items-center bg-black/40 p-3">
-            <img src={cur.data} alt="" className="max-h-[84vh] max-w-full rounded-lg object-contain" />
+            <ZoomableImage key={cur.id} src={cur.data} />
             <div className="absolute right-3 top-3 flex gap-2">
               <a href={cur.data} download={`snippet-image-${(open ?? 0) + 1}.webp`} className="btn !h-9 bg-surface/90" aria-label="Download image"><Icon name="download" size={16} /></a>
               {onRemove && (
