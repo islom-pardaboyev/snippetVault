@@ -10,12 +10,19 @@ import { newId } from "../lib/utils";
 import type { Snippet, SnippetImage } from "../lib/types";
 import {
   deleteGalleryImage, deleteSnippetImages, deleteSnippetVersions, deleteVaultImage, deleteVaultItem,
-  entryOf, getVaultMeta,
+  bumpAudioCount, entryOf, getVaultMeta, patchVaultItem,
   listVaultImages, makeVaultItem, openPayload, openVaultImage, putGalleryImage, putVaultImage, putVaultItem, putVaultMeta,
   readSnippetImages, sealForVault, sealPayload, snippetOf, watchGalleryImages, watchVaultItems, writeSnippetImage,
   type VaultEntry, type VaultGalleryImage, type VaultImage, type VaultItem, type VaultMeta, type VaultPayload,
 } from "../lib/vault";
 import { revokeShare } from "../lib/share";
+import {
+  canonicalAudioType, deleteGalleryAudio, deleteVaultAudio, listVaultAudio, moveOutCheck, openAudioBytes, openAudioInfo,
+  putGalleryAudio, putVaultAudio, readAudioDuration, saveOrPurge, sealAudio, storeAudioBatch, watchGalleryAudio,
+  type AudioInfo, type VaultAudio, type VaultGalleryAudio,
+} from "../lib/vault-audio";
+
+export interface AudioEntry { id: string; info: AudioInfo }
 
 export type VaultStatus = "loading" | "unavailable" | "unset" | "locked" | "unlocked";
 
@@ -65,6 +72,17 @@ interface VaultCtx {
   removeGalleryImage(imageId: string): Promise<void>;
   /** Decrypt a slice of the gallery, so the grid loads a page at a time. */
   loadGalleryImages(offset?: number, limit?: number): Promise<SnippetImage[]>;
+  /** Encrypted records of the standalone audio (ciphertext, safe to hold while locked). */
+  audioGallery: VaultGalleryAudio[];
+  /** Add audio to an item, or to the standalone vault audio when `itemId` is null. */
+  addAudio(itemId: string | null, files: File[]): Promise<{ added: number; error?: string }>;
+  removeAudio(itemId: string | null, audioId: string): Promise<void>;
+  /** The reason an item can't move out (it still has audio records), or null. Reads the real records. */
+  moveOutBlock(id: string): Promise<string | null>;
+  /** Decrypt only each record's descriptive meta; one that won't open is skipped. */
+  loadAudio(itemId: string | null): Promise<AudioEntry[]>;
+  /** Download, verify and decrypt one audio file; the blob carries the stored mime type. */
+  openAudioBlob(itemId: string | null, audioId: string): Promise<Blob>;
 }
 
 const Ctx = createContext<VaultCtx | null>(null);
@@ -80,11 +98,16 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<VaultItem[]>([]);
   const [entries, setEntries] = useState<VaultEntry[]>([]);
   const [gallery, setGallery] = useState<VaultGalleryImage[]>([]);
+  const [audioGallery, setAudioGallery] = useState<VaultGalleryAudio[]>([]);
   const keyRef = useRef<CryptoKey | null>(null);
   /** Image records per item, so paging the gallery doesn't re-download every record each time. */
   const imageMeta = useRef<Map<string, VaultImage[]>>(new Map());
   /** Mirror of `gallery`, so `loadGalleryImages` keeps a stable identity across snapshots. */
   const galleryRef = useRef<VaultGalleryImage[]>([]);
+  /** Mirror of `audioGallery`, for stable `loadAudio` / `openAudioBlob` identities. */
+  const audioGalleryRef = useRef<VaultGalleryAudio[]>([]);
+  /** Audio records per item, cleared on lock/reset like `imageMeta`. */
+  const audioMeta = useRef<Map<string, VaultAudio[]>>(new Map());
 
   /* load the vault metadata once we know who is signed in */
   useEffect(() => {
@@ -115,9 +138,16 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     return watchGalleryImages(uid, (list) => { galleryRef.current = list; setGallery(list); });
   }, [uid]);
 
+  /* live list of the standalone audio — ciphertext only */
+  useEffect(() => {
+    if (!uid || DEMO) { audioGalleryRef.current = []; setAudioGallery([]); return; }
+    return watchGalleryAudio(uid, (list) => { audioGalleryRef.current = list; setAudioGallery(list); });
+  }, [uid]);
+
   const lock = useCallback(() => {
     keyRef.current = null;
     imageMeta.current.clear();
+    audioMeta.current.clear();
     setEntries([]);
     setStatus((s) => (s === "unlocked" ? "locked" : s));
   }, []);
@@ -182,7 +212,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     keyRef.current = null;
     imageMeta.current.clear();
     galleryRef.current = [];
-    setEntries([]); setItems([]); setGallery([]);
+    audioMeta.current.clear();
+    audioGalleryRef.current = [];
+    setEntries([]); setItems([]); setGallery([]); setAudioGallery([]);
     setMeta(null);
     setStatus("unset");
   }, [uid]);
@@ -224,6 +256,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     if (!uid || !key) throw new Error("Unlock the vault first.");
     const item = items.find((i) => i.id === id);
     if (!item) throw new Error("That item isn't in the vault.");
+    const blocked = await moveOutCheck(uid, id);
+    if (blocked) throw new Error(blocked);
     const payload = await openPayload(key, item);
     const sealed = await listVaultImages(uid, id);
     const images = await Promise.all(sealed.map((im) => openVaultImage(key, im)));
@@ -248,7 +282,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       ...(entry.group ? { group: entry.group } : {}),
       favorite: entry.favorite,
     };
-    await putVaultItem(uid, { ...item, enc: await sealPayload(key, entry.id, payload), updated_at: new Date().toISOString() });
+    await patchVaultItem(uid, item.id, { enc: await sealPayload(key, entry.id, payload) });
   }, [uid, items]);
 
   const deleteEntry = useCallback(async (id: string) => {
@@ -292,7 +326,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       };
       await putVaultImage(uid, id, await sealForVault(key, image));
     }
-    await putVaultItem(uid, { ...item, image_count: (item.image_count ?? 0) + ok.length, updated_at: new Date().toISOString() });
+    await patchVaultItem(uid, id, { image_count: (item.image_count ?? 0) + ok.length });
     imageMeta.current.delete(id);
     return error ? { added: ok.length, error } : { added: ok.length };
   }, [uid, items]);
@@ -303,7 +337,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     imageMeta.current.delete(id);
     const item = items.find((i) => i.id === id);
     if (item && item.image_count > 0) {
-      await putVaultItem(uid, { ...item, image_count: item.image_count - 1, updated_at: new Date().toISOString() });
+      await patchVaultItem(uid, id, { image_count: item.image_count - 1 });
     }
   }, [uid, items]);
 
@@ -343,12 +377,83 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     return opened.filter((im): im is SnippetImage => im !== null);
   }, []);
 
+  /* ------------------------------------------------------- audio */
+
+  const audioRecords = useCallback(async (itemId: string | null): Promise<VaultAudio[]> => {
+    if (itemId === null) return audioGalleryRef.current;
+    if (!uid) return [];
+    const cached = audioMeta.current.get(itemId);
+    if (cached) return cached;
+    const list = await listVaultAudio(uid, itemId);
+    audioMeta.current.set(itemId, list);
+    return list;
+  }, [uid]);
+
+  const loadAudio = useCallback(async (itemId: string | null): Promise<AudioEntry[]> => {
+    const key = keyRef.current;
+    if (!key) return [];
+    const all = await audioRecords(itemId);
+    const opened = await Promise.all(all.map(async (a) => {
+      try { return { id: a.id, info: await openAudioInfo(key, a) }; } catch { return null; }
+    }));
+    return opened.filter((a): a is AudioEntry => a !== null);
+  }, [audioRecords]);
+
+  const openAudioBlob = useCallback(async (itemId: string | null, audioId: string): Promise<Blob> => {
+    const key = keyRef.current;
+    if (!key) throw new Error("Unlock the vault first.");
+    const record = (await audioRecords(itemId)).find((a) => a.id === audioId);
+    if (!record) throw new Error("That audio isn't in the vault.");
+    const info = await openAudioInfo(key, record);
+    return new Blob([await openAudioBytes(key, record)], { type: info.mime });
+  }, [audioRecords]);
+
+  const moveOutBlock = useCallback(async (id: string): Promise<string | null> => {
+    if (!uid) return null;
+    return moveOutCheck(uid, id);
+  }, [uid]);
+
+  const addAudio = useCallback(async (itemId: string | null, files: File[]): Promise<{ added: number; error?: string }> => {
+    const key = keyRef.current;
+    if (!uid || !key) throw new Error("Unlock the vault first.");
+    const item = itemId === null ? null : items.find((i) => i.id === itemId);
+    if (itemId !== null && !item) throw new Error("That item isn't in the vault.");
+
+    const result = await storeAudioBatch(files, async (file) => {
+      const id = newId();
+      const info: AudioInfo = {
+        name: file.name, mime: canonicalAudioType(file) ?? file.type, size: file.size,
+        duration: await readAudioDuration(file), created_at: new Date().toISOString(),
+      };
+      const sealed = await sealAudio(key, id, info, new Uint8Array(await file.arrayBuffer()));
+      if (itemId === null) {
+        await saveOrPurge(sealed, () => putGalleryAudio(uid, { ...sealed, created_at: info.created_at }));
+        return;
+      }
+      await saveOrPurge(sealed, () => putVaultAudio(uid, itemId, sealed));
+      // Bump right after each stored record (atomic increment), so the counter tracks the
+      // records even if a later file in the batch fails or the item changes underneath us.
+      audioMeta.current.delete(itemId);
+      await bumpAudioCount(uid, itemId, 1);
+    });
+    return result;
+  }, [uid, items]);
+
+  const removeAudio = useCallback(async (itemId: string | null, audioId: string) => {
+    if (!uid) throw new Error("Sign in to use the vault.");
+    if (itemId === null) { await deleteGalleryAudio(uid, audioId); return; }
+    await deleteVaultAudio(uid, itemId, audioId);
+    audioMeta.current.delete(itemId);
+    // Only after the record is really gone; rejects (harmlessly) if the item was deleted meanwhile.
+    await bumpAudioCount(uid, itemId, -1);
+  }, [uid]);
+
   const value = useMemo<VaultCtx>(() => ({
-    available, status, items, entries, gallery, recoveryAvailable: !!meta?.recovery_wrapped_dek,
+    available, status, items, entries, gallery, audioGallery, recoveryAvailable: !!meta?.recovery_wrapped_dek,
     setup, unlock, resetPassphrase, resetVault, lock, changePassphrase,
     moveIn, moveGroupIn, moveOut, updateEntry, deleteEntry, addImages, removeImage, loadImages,
-    addGalleryImages, removeGalleryImage, loadGalleryImages,
-  }), [available, status, items, entries, gallery, meta, setup, unlock, resetPassphrase, resetVault, lock, changePassphrase, moveIn, moveGroupIn, moveOut, updateEntry, deleteEntry, addImages, removeImage, loadImages, addGalleryImages, removeGalleryImage, loadGalleryImages]);
+    addGalleryImages, removeGalleryImage, loadGalleryImages, addAudio, removeAudio, loadAudio, openAudioBlob, moveOutBlock,
+  }), [available, status, items, entries, gallery, audioGallery, meta, setup, unlock, resetPassphrase, resetVault, lock, changePassphrase, moveIn, moveGroupIn, moveOut, updateEntry, deleteEntry, addImages, removeImage, loadImages, addGalleryImages, removeGalleryImage, loadGalleryImages, addAudio, removeAudio, loadAudio, openAudioBlob, moveOutBlock]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

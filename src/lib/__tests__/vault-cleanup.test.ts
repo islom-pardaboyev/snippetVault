@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { deleteGalleryImage, deleteVaultImage, deleteVaultItem } from "../vault";
+import { bumpAudioCount, deleteGalleryImage, deleteVaultImage, deleteVaultItem, patchVaultItem } from "../vault";
+import { deleteGalleryAudio, deleteVaultAudio, moveOutCheck } from "../vault-audio";
 import { wipeUserData, wipeVault } from "../account";
 
 /**
@@ -60,6 +61,18 @@ vi.mock("firebase/firestore", () => {
     },
     deleteDoc: async (r: Ref) => { store.docs.delete(r.path); },
     setDoc: async (r: Ref, data: unknown) => { store.docs.set(r.path, data as Record<string, unknown>); },
+    /** Partial write: merges the given fields, resolves `increment` sentinels, rejects on a missing doc. */
+    updateDoc: async (r: Ref, fields: Record<string, unknown>) => {
+      const cur = store.docs.get(r.path);
+      if (!cur) throw new Error("not-found");
+      const next = { ...cur };
+      for (const [k, v] of Object.entries(fields)) {
+        const inc = (v as { __inc?: number } | null)?.__inc;
+        next[k] = inc === undefined ? v : ((next[k] as number | undefined) ?? 0) + inc;
+      }
+      store.docs.set(r.path, next);
+    },
+    increment: (n: number) => ({ __inc: n }),
     writeBatch: () => {
       const pending: string[] = [];
       return {
@@ -75,6 +88,15 @@ const UID = "user-1";
 const ITEM = "snip-1";
 const HOSTED = "https://ibb.co/2ndCYJK/670a7e48ddcb85ac340c717a41047e5c";
 const GALLERY_HOSTED = "https://ibb.co/9zKLmn/0a1b2c3d4e5f60718293a4b5c6d7e8f9";
+const AUDIO_A = "https://ibb.co/aaa111/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const AUDIO_B = "https://ibb.co/bbb222/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+const AUDIO_G = "https://ibb.co/ggg333/cccccccccccccccccccccccccccccccc";
+
+const audioDoc = (delete_url: string, extra: Record<string, unknown> = {}) => ({
+  meta: { iv: "m", ct: "n" },
+  remote: { url: "https://i.ibb.co/z/a.png", iv: "a", sha: "s", bytes: 10, delete_url },
+  ...extra,
+});
 
 /** One vault item with two images: one hosted on imgbb, one sealed inline (nothing to purge). */
 function seedVault() {
@@ -203,5 +225,105 @@ describe("wipeVault", () => {
 
     await expect(wipeVault(UID)).resolves.toBeUndefined();
     expect([...store.docs.keys()]).toEqual([]);
+  });
+});
+
+describe("vault audio cleanup", () => {
+  function seedAudio() {
+    store.docs.set(`users/${UID}/vault/${ITEM}`, { enc: { iv: "a", ct: "b" }, image_count: 0, audio_count: 2, created_at: "t", updated_at: "t" });
+    store.docs.set(`users/${UID}/vault/${ITEM}/audio/a-1`, audioDoc(AUDIO_A));
+    store.docs.set(`users/${UID}/vault/${ITEM}/audio/a-2`, audioDoc(AUDIO_B));
+    store.docs.set(`users/${UID}/vaultAudio/g-1`, audioDoc(AUDIO_G, { created_at: "t" }));
+  }
+
+  it("deleting an item removes both audio docs and asks the host to delete each blob", async () => {
+    seedAudio();
+    await deleteVaultItem(UID, ITEM);
+
+    expect(store.docs.has(`users/${UID}/vault/${ITEM}/audio/a-1`)).toBe(false);
+    expect(store.docs.has(`users/${UID}/vault/${ITEM}/audio/a-2`)).toBe(false);
+    expect(store.docs.has(`users/${UID}/vault/${ITEM}`)).toBe(false);
+    expect([...host.deleted].sort()).toEqual([AUDIO_A, AUDIO_B]);
+  });
+
+  it("deleting one item audio removes only that record and calls the host once", async () => {
+    seedAudio();
+    await deleteVaultAudio(UID, ITEM, "a-1");
+
+    expect(store.docs.has(`users/${UID}/vault/${ITEM}/audio/a-1`)).toBe(false);
+    expect(store.docs.has(`users/${UID}/vault/${ITEM}/audio/a-2`)).toBe(true);
+    expect(host.deleted).toEqual([AUDIO_A]);
+  });
+
+  it("deleting a gallery audio removes the record and calls the host once", async () => {
+    seedAudio();
+    await deleteGalleryAudio(UID, "g-1");
+
+    expect(store.docs.has(`users/${UID}/vaultAudio/g-1`)).toBe(false);
+    expect(host.deleted).toEqual([AUDIO_G]);
+  });
+
+  it("succeeds even when the host refuses", async () => {
+    seedAudio();
+    host.fail = true;
+    await expect(deleteVaultAudio(UID, ITEM, "a-1")).resolves.toBeUndefined();
+    await expect(deleteGalleryAudio(UID, "g-1")).resolves.toBeUndefined();
+    expect(store.docs.has(`users/${UID}/vault/${ITEM}/audio/a-1`)).toBe(false);
+    expect(store.docs.has(`users/${UID}/vaultAudio/g-1`)).toBe(false);
+  });
+
+  it("wipeVault removes item audio and gallery audio and purges their blobs", async () => {
+    store.docs.set(`users/${UID}/meta/vault`, { wrapped_dek: "w", kdf: {} });
+    seedAudio();
+    await wipeVault(UID);
+
+    expect([...store.docs.keys()]).toEqual([]);
+    expect([...host.deleted].sort()).toEqual([AUDIO_A, AUDIO_B, AUDIO_G]);
+  });
+
+  it("wipeUserData removes item audio and gallery audio and purges their blobs", async () => {
+    store.docs.set(`users/${UID}/snippets/s1`, { title: "a" });
+    seedAudio();
+    await wipeUserData(UID);
+
+    expect([...store.docs.keys()]).toEqual([]);
+    expect([...host.deleted].sort()).toEqual([AUDIO_A, AUDIO_B, AUDIO_G]);
+  });
+});
+
+describe("vault counters", () => {
+  const item = () => store.docs.get(`users/${UID}/vault/${ITEM}`)!;
+
+  it("a stale-snapshot image write never touches audio_count", async () => {
+    // The snapshot the UI held had no audio; meanwhile two audio files were stored.
+    store.docs.set(`users/${UID}/vault/${ITEM}`, { enc: { iv: "a", ct: "b" }, image_count: 1, audio_count: 2, created_at: "t", updated_at: "t" });
+    await patchVaultItem(UID, ITEM, { image_count: 2 });
+    expect(item().image_count).toBe(2);
+    expect(item().audio_count).toBe(2);
+    expect(item().created_at).toBe("t");
+    expect(item().updated_at).not.toBe("t");
+  });
+
+  it("bumpAudioCount increments and decrements relative to the stored value", async () => {
+    store.docs.set(`users/${UID}/vault/${ITEM}`, { enc: { iv: "a", ct: "b" }, image_count: 0, created_at: "t", updated_at: "t" });
+    await bumpAudioCount(UID, ITEM, 1);
+    await bumpAudioCount(UID, ITEM, 1);
+    await bumpAudioCount(UID, ITEM, -1);
+    expect(item().audio_count).toBe(1);
+  });
+
+  it("bumpAudioCount and patchVaultItem reject on a deleted item instead of recreating it", async () => {
+    await expect(bumpAudioCount(UID, ITEM, 1)).rejects.toThrow();
+    await expect(patchVaultItem(UID, ITEM, { image_count: 1 })).rejects.toThrow();
+    expect(store.docs.has(`users/${UID}/vault/${ITEM}`)).toBe(false);
+  });
+
+  it("the move-out guard trusts the audio records, not audio_count", async () => {
+    store.docs.set(`users/${UID}/vault/${ITEM}`, { enc: { iv: "a", ct: "b" }, image_count: 0, audio_count: 0, created_at: "t", updated_at: "t" });
+    expect(await moveOutCheck(UID, ITEM)).toBeNull();
+    store.docs.set(`users/${UID}/vault/${ITEM}/audio/a-1`, audioDoc(AUDIO_A));
+    expect(await moveOutCheck(UID, ITEM)).toEqual(expect.stringContaining("Remove this item's audio"));
+    store.docs.set(`users/${UID}/vault/${ITEM}`, { enc: { iv: "a", ct: "b" }, image_count: 0, created_at: "t", updated_at: "t" }); // no audio_count at all
+    expect(await moveOutCheck(UID, ITEM)).not.toBeNull();
   });
 });

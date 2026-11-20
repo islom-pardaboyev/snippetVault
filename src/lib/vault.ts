@@ -1,5 +1,5 @@
 import {
-  collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, orderBy, query, setDoc,
+  collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, orderBy, query, setDoc, updateDoc,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import {
@@ -48,6 +48,8 @@ export interface VaultItem {
   id: string;
   enc: Sealed;
   image_count: number;
+  /** Optional: items written before audio existed lack it (and Firestore rejects `undefined`). */
+  audio_count?: number;
   created_at: string;
   updated_at: string;
 }
@@ -73,7 +75,7 @@ export interface VaultImage {
 }
 
 /** Plaintext metadata about a hosted blob. The URL is opaque; `iv`/`sha`/`bytes` are not secret. */
-interface VaultImageRemote {
+export interface VaultImageRemote {
   url: string;
   /** base64 GCM IV — needed to decrypt, useless without the vault key. */
   iv: string;
@@ -98,6 +100,7 @@ export interface VaultGalleryImage extends VaultImage {
 export type VaultEntry = VaultPayload & {
   id: string;
   image_count: number;
+  audio_count: number;
   created_at: string;
   updated_at: string;
 };
@@ -286,6 +289,7 @@ export const entryOf = (item: VaultItem, payload: VaultPayload): VaultEntry => (
   ...payload,
   id: item.id,
   image_count: item.image_count,
+  audio_count: item.audio_count ?? 0,
   created_at: item.created_at,
   updated_at: item.updated_at,
 });
@@ -325,12 +329,28 @@ export async function putVaultItem(uid: string, item: VaultItem): Promise<void> 
 }
 
 /**
+ * Partial write of an item's own fields. `updateDoc` (unlike `setDoc`) fails on a missing doc, so
+ * a late write can never resurrect a deleted item, and it never touches fields it wasn't given
+ * (a stale snapshot can't reset `audio_count`).
+ */
+export async function patchVaultItem(
+  uid: string, id: string, fields: Partial<Pick<VaultItem, "enc" | "image_count">>,
+): Promise<void> {
+  await updateDoc(itemDoc(uid, id), { ...fields, updated_at: new Date().toISOString() });
+}
+
+/** Atomically add `delta` to an item's `audio_count` (rejects if the item is gone). */
+export async function bumpAudioCount(uid: string, id: string, delta: number): Promise<void> {
+  await updateDoc(itemDoc(uid, id), { audio_count: increment(delta), updated_at: new Date().toISOString() });
+}
+
+/**
  * Best-effort removal of the hosted (imgbb) ciphertext behind image records. The Firestore
  * pointers are already gone by the time this runs, so a failure here costs only third-party
  * storage quota — never readability: what sits at the far end is AES-GCM ciphertext.
  * Callers don't wait on the host per image; all requests fire in parallel and are settled.
  */
-async function purgeHosted(images: Omit<VaultImage, "id">[]): Promise<void> {
+export async function purgeHosted(images: Omit<VaultImage, "id">[]): Promise<void> {
   const urls = images.map((im) => im.remote?.delete_url).filter((u): u is string => !!u);
   if (!urls.length) return;
   await Promise.allSettled(urls.map((u) => deleteHostedImage(u)));
@@ -339,12 +359,15 @@ async function purgeHosted(images: Omit<VaultImage, "id">[]): Promise<void> {
 export async function deleteVaultItem(uid: string, id: string): Promise<void> {
   const snap = await getDocs(imagesCol(uid, id));
   const images = snap.docs.map((d) => d.data() as Omit<VaultImage, "id">);
+  // Audio records have the same `remote` shape; read inline (not via vault-audio.ts, which imports this file).
+  const audioSnap = await getDocs(collection(db, "users", uid, "vault", id, "audio"));
+  const audio = audioSnap.docs.map((d) => d.data() as Omit<VaultImage, "id">);
   // The records the user sees go first; then the blobs behind them, best effort. This one
   // function is what moves *out* of the vault (the plaintext was already restored to
   // Firestore by the caller) and what deletes it outright — both must drop the host copy.
-  await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
+  await Promise.all([...snap.docs, ...audioSnap.docs].map((d) => deleteDoc(d.ref)));
   await deleteDoc(itemDoc(uid, id));
-  await purgeHosted(images);
+  await purgeHosted([...images, ...audio]);
 }
 
 /* ----------------------------------------------------------------- images */

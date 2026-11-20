@@ -1,0 +1,239 @@
+import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, orderBy, query, setDoc } from "firebase/firestore";
+import { db } from "./firebase";
+import { type Sealed, fromBase64, openBytes, openText, sealBytes, sealText, sha256, toBase64 } from "./crypto";
+import { packBytes, unpackBytes } from "./container";
+import { fetchBlob, hasImgbb, uploadPng } from "./imgbb";
+import { purgeHosted, type VaultImageRemote } from "./vault";
+
+/**
+ * Encrypted audio for the Vault. Same pipeline as hosted vault images (seal, wrap in a PNG,
+ * upload, download, hash-compare), but audio is never stored inline: if it can't be hosted and
+ * verified, sealing fails. The descriptive `meta` is sealed separately with AAD `${id}:meta`;
+ * the audio bytes are sealed with AAD `id`.
+ */
+
+export const AUDIO_MAX_BYTES = 25 * 1024 * 1024;
+export const AUDIO_TYPES: readonly string[] = [
+  "audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/ogg", "audio/wav", "audio/x-wav", "audio/webm",
+];
+
+export interface AudioInfo {
+  name: string;
+  mime: string;
+  size: number;
+  /** Seconds; 0 when unknown. */
+  duration: number;
+  created_at: string;
+}
+
+export interface VaultAudio {
+  id: string;
+  /** {@link AudioInfo} as sealed JSON. */
+  meta: Sealed;
+  remote: VaultImageRemote;
+}
+
+/** `created_at` is the one plaintext field; it only exists so the list can be sorted. */
+export interface VaultGalleryAudio extends VaultAudio {
+  created_at: string;
+}
+
+/** Types browsers really report for the same formats, mapped onto the canonical set above. */
+const MIME_ALIASES: Record<string, string> = {
+  "audio/mp3": "audio/mpeg", "audio/x-mpeg": "audio/mpeg", "audio/x-mp3": "audio/mpeg",
+  "audio/wave": "audio/wav", "audio/vnd.wave": "audio/wav",
+  "audio/aac": "audio/mp4", "audio/x-aac": "audio/mp4", "audio/m4a": "audio/mp4",
+  "audio/opus": "audio/ogg", "audio/x-ogg": "audio/ogg",
+};
+const EXT_TYPES: Record<string, string> = {
+  mp3: "audio/mpeg", m4a: "audio/mp4", ogg: "audio/ogg", oga: "audio/ogg", opus: "audio/ogg",
+  wav: "audio/wav", webm: "audio/webm",
+};
+/** For the file input's `accept` attribute: canonical types, aliases and extensions. */
+export const AUDIO_ACCEPT = [
+  ...AUDIO_TYPES, ...Object.keys(MIME_ALIASES), ...Object.keys(EXT_TYPES).map((e) => `.${e}`),
+].join(",");
+
+/**
+ * The canonical, playable type for a file, or `null` when it isn't audio we accept. An empty
+ * type (common for .m4a/.opus on Android and Linux) falls back to the extension.
+ */
+export function canonicalAudioType(file: { name: string; type: string }): string | null {
+  const type = file.type.trim().toLowerCase();
+  if (AUDIO_TYPES.includes(type)) return type;
+  if (type in MIME_ALIASES) return MIME_ALIASES[type];
+  if (type !== "") return null;
+  const ext = /\.([a-z0-9]+)$/i.exec(file.name)?.[1].toLowerCase();
+  return (ext && EXT_TYPES[ext]) || null;
+}
+
+export function checkAudioFile(file: { name: string; type: string; size: number }): string | null {
+  if (!canonicalAudioType(file)) return "That file is not a supported audio type (MP3, M4A, OGG, WAV or WebM).";
+  if (file.size <= 0) return "That audio file is empty.";
+  if (file.size > AUDIO_MAX_BYTES) return "That audio file is larger than 25 MB.";
+  return null;
+}
+
+export const MOVE_OUT_AUDIO_ERROR = "Remove this item's audio first. Normal snippets can't hold audio.";
+
+/** Normal snippets can't hold audio, so an item that still has some must not move out. */
+export function moveOutBlocker(audioCount: number | undefined): string | null {
+  return (audioCount ?? 0) > 0 ? MOVE_OUT_AUDIO_ERROR : null;
+}
+
+/** The Move-out guard, based on the real audio records (the `audio_count` counter can drift). */
+export async function moveOutCheck(uid: string, itemId: string): Promise<string | null> {
+  return moveOutBlocker((await listVaultAudio(uid, itemId)).length);
+}
+
+/**
+ * Validate and store a batch of audio files one at a time. Never throws: a bad or failing file
+ * is skipped with a note, and `added` is exactly the number of records `store` completed, so the
+ * caller can bump `audio_count` by that number even after a partial failure.
+ */
+export const AUDIO_SAVE_ERROR = "was uploaded but couldn't be saved. Check that the Firestore rules are deployed.";
+
+export async function storeAudioBatch(
+  files: File[],
+  store: (file: File) => Promise<void>,
+  check: (file: File) => string | null = checkAudioFile,
+): Promise<{ added: number; error?: string }> {
+  if (!hasImgbb()) {
+    return { added: 0, error: "Audio needs image hosting. Set IMB_API to add audio to the vault." };
+  }
+  if (!files.length) return { added: 0, error: "No audio files to add." };
+  const problems: string[] = [];
+  let added = 0;
+  for (const file of files) {
+    const bad = check(file);
+    if (bad) { problems.push(`${file.name}: ${bad}`); continue; }
+    try {
+      await store(file);
+      added++;
+    } catch (e) {
+      const saveFailed = e instanceof Error && e.message === "audio-save-failed";
+      problems.push(`${file.name}: ${saveFailed ? AUDIO_SAVE_ERROR : "couldn't be encrypted and hosted."}`);
+    }
+  }
+  return problems.length ? { added, error: problems.join(" ") } : { added };
+}
+
+export async function sealAudio(
+  key: CryptoKey, id: string, info: AudioInfo, bytes: Uint8Array<ArrayBuffer>,
+): Promise<VaultAudio> {
+  if (!hasImgbb()) throw new Error("audio-needs-host");
+  const meta = await sealText(key, JSON.stringify(info), `${id}:meta`);
+  const enc = await sealBytes(key, bytes, id);
+  try {
+    const ct = fromBase64(enc.ct);
+    const sha = await sha256(ct);
+    const { url, delete_url } = await uploadPng(await packBytes(ct), id);
+    const round = await unpackBytes(await fetchBlob(url));
+    if ((await sha256(round)) !== sha) throw new Error("host-changed-the-bytes");
+    return { id, meta, remote: { url, iv: enc.iv, sha, bytes: ct.length, delete_url } };
+  } catch {
+    throw new Error("audio-host-failed");
+  }
+}
+
+export async function openAudioInfo(key: CryptoKey, audio: VaultAudio): Promise<AudioInfo> {
+  return JSON.parse(await openText(key, audio.meta, `${audio.id}:meta`)) as AudioInfo;
+}
+
+export async function openAudioBytes(key: CryptoKey, audio: VaultAudio): Promise<Uint8Array<ArrayBuffer>> {
+  const { url, iv, sha, bytes } = audio.remote;
+  let raw: Uint8Array<ArrayBuffer>;
+  try {
+    raw = await unpackBytes(await fetchBlob(url));
+  } catch {
+    throw new Error("hosted-audio-unavailable");
+  }
+  if (raw.length !== bytes || (await sha256(raw)) !== sha) throw new Error("hosted-audio-unavailable");
+  return openBytes(key, { v: 1, iv, ct: toBase64(raw) }, audio.id);
+}
+
+/**
+ * Run a Firestore put for an already-hosted record; if it fails, best-effort delete the blob so
+ * it isn't orphaned and report a distinct `audio-save-failed`.
+ */
+export async function saveOrPurge(sealed: VaultAudio, put: () => Promise<void>): Promise<void> {
+  try {
+    await put();
+  } catch {
+    try { await purgeHosted([{ remote: sealed.remote }]); } catch { /* best effort */ }
+    throw new Error("audio-save-failed");
+  }
+}
+
+export const AUDIO_DURATION_TIMEOUT_MS = 5000;
+
+/** Audio length in seconds, or 0 when the browser can't read it (or takes over ~5 s). */
+export function readAudioDuration(
+  file: File, makeAudio: () => HTMLAudioElement = () => new Audio(),
+): Promise<number> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const el = makeAudio();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const done = (n: number) => {
+      clearTimeout(timer);
+      el.onloadedmetadata = null;
+      el.onerror = null;
+      URL.revokeObjectURL(url);
+      resolve(Number.isFinite(n) && n > 0 ? n : 0);
+    };
+    timer = setTimeout(() => done(0), AUDIO_DURATION_TIMEOUT_MS);
+    el.preload = "metadata";
+    el.onloadedmetadata = () => done(el.duration);
+    el.onerror = () => done(0);
+    el.src = url;
+  });
+}
+
+/* --------------------------------------------------------------- Firestore */
+
+const audioCol = (uid: string, itemId: string) => collection(db, "users", uid, "vault", itemId, "audio");
+const audioDoc = (uid: string, itemId: string, audioId: string) => doc(db, "users", uid, "vault", itemId, "audio", audioId);
+const galleryCol = (uid: string) => collection(db, "users", uid, "vaultAudio");
+const galleryDoc = (uid: string, audioId: string) => doc(db, "users", uid, "vaultAudio", audioId);
+
+export async function listVaultAudio(uid: string, itemId: string): Promise<VaultAudio[]> {
+  const snap = await getDocs(query(audioCol(uid, itemId), orderBy("__name__")));
+  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<VaultAudio, "id">) }));
+}
+
+export async function putVaultAudio(uid: string, itemId: string, audio: VaultAudio): Promise<void> {
+  const { id, ...data } = audio;
+  await setDoc(audioDoc(uid, itemId, id), data);
+}
+
+/** Record first, then the hosted blob, best effort (same contract as deleting an image). */
+export async function deleteVaultAudio(uid: string, itemId: string, audioId: string): Promise<void> {
+  const ref = audioDoc(uid, itemId, audioId);
+  const snap = await getDoc(ref);
+  await deleteDoc(ref);
+  if (snap.exists()) await purgeHosted([snap.data() as Omit<VaultAudio, "id">]);
+}
+
+/** Standalone vault audio, newest first. */
+export function watchGalleryAudio(
+  uid: string, cb: (a: VaultGalleryAudio[]) => void, onError?: () => void,
+): () => void {
+  return onSnapshot(
+    query(galleryCol(uid), orderBy("created_at", "desc")),
+    (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<VaultGalleryAudio, "id">) }))),
+    () => onError?.(),
+  );
+}
+
+export async function putGalleryAudio(uid: string, audio: VaultGalleryAudio): Promise<void> {
+  const { id, ...data } = audio;
+  await setDoc(galleryDoc(uid, id), data);
+}
+
+export async function deleteGalleryAudio(uid: string, audioId: string): Promise<void> {
+  const ref = galleryDoc(uid, audioId);
+  const snap = await getDoc(ref);
+  await deleteDoc(ref);
+  if (snap.exists()) await purgeHosted([snap.data() as Omit<VaultGalleryAudio, "id">]);
+}

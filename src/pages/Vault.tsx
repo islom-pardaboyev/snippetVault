@@ -4,6 +4,7 @@ import { Icon } from "../components/Icon";
 import { LangIcon } from "../components/LangIcon";
 import { CodeBlock } from "../components/CodeBlock";
 import { ImageGallery } from "../components/ImageGallery";
+import { AudioSection } from "../components/AudioSection";
 import { CopyMenu } from "../components/CopyMenu";
 import { useModal } from "../components/Modal";
 import { PwMeter, passwordValid } from "../components/PwMeter";
@@ -29,7 +30,7 @@ const GALLERY_PAGE = 12;
 
 /** `/vault` — set up, unlock and browse the encrypted vault. */
 export function Vault() {
-  const { available, status, entries, items, gallery, lock } = useVault();
+  const { available, status, entries, items, gallery, audioGallery, lock } = useVault();
   const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
 
   if (!available) {
@@ -55,7 +56,8 @@ export function Vault() {
           </h1>
           <p className="mt-1 text-sm text-muted">
             {entries.length} locked item{entries.length === 1 ? "" : "s"}
-            {gallery.length > 0 && <> · {gallery.length} image{gallery.length === 1 ? "" : "s"}</>} ·
+            {gallery.length > 0 && <> · {gallery.length} image{gallery.length === 1 ? "" : "s"}</>}
+            {audioGallery.length > 0 && <> · {audioGallery.length} audio file{audioGallery.length === 1 ? "" : "s"}</>} ·
             {" "}decrypted only in this tab, never stored in the clear
           </p>
         </div>
@@ -63,7 +65,7 @@ export function Vault() {
       </div>
 
       {entries.length === 0 ? (
-        gallery.length === 0 ? (
+        gallery.length === 0 && audioGallery.length === 0 ? (
           <div className="rounded-3xl border border-dashed border-line-strong bg-surface px-5 py-[64px] text-center">
             <div className="mx-auto mb-[18px] grid size-[54px] place-items-center rounded-2xl bg-accent/15 text-accent"><Icon name="shield" size={26} /></div>
             <h2 className="mb-1.5 text-[22px] font-bold tracking-tight">Your vault is empty</h2>
@@ -79,7 +81,7 @@ export function Vault() {
           <div className="mb-5 rounded-2xl border border-dashed border-line-strong bg-surface px-5 py-7 text-center">
             <p className="text-muted">
               <b className="text-ink">No locked snippets yet.</b> Open any snippet and choose{" "}
-              <b className="text-ink">Move to Vault</b> to lock it away — your encrypted images live below.
+              <b className="text-ink">Move to Vault</b> to lock it away — your encrypted images and audio live below.
             </p>
           </div>
         )
@@ -89,6 +91,7 @@ export function Vault() {
         </div>
       )}
       <GallerySection />
+      <AudioSection itemId={null} title="Voice & music" />
       <SettingsFoot items={items.length} />
     </div>
   );
@@ -453,7 +456,7 @@ function UnlockCard() {
 
 /** The last resort: with no passphrase and no recovery key the vault can't be opened, only erased. */
 function ResetVault() {
-  const { resetVault, items, gallery } = useVault();
+  const { resetVault, items, gallery, audioGallery } = useVault();
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState("");
@@ -480,13 +483,14 @@ function ResetVault() {
       </div>
     );
   }
-  const n = items.length, m = gallery.length;
+  const n = items.length, m = gallery.length, a = audioGallery.length;
   return (
     <form onSubmit={wipe} className="mt-8 grid gap-3 rounded-[14px] border border-danger/40 bg-danger/10 p-4">
       <h2 className="text-[15px] font-bold text-danger">Reset the vault</h2>
       <p className="text-[13px] text-muted">
         This permanently deletes everything in your vault: <b className="text-ink">{n} item{n === 1 ? "" : "s"}</b>
-        {m > 0 && <> and <b className="text-ink">{m} image{m === 1 ? "" : "s"}</b></>}. They are encrypted and can't be opened without
+        {m > 0 && <>, <b className="text-ink">{m} image{m === 1 ? "" : "s"}</b></>}
+        {a > 0 && <>, <b className="text-ink">{a} audio file{a === 1 ? "" : "s"}</b></>}. They are encrypted and can't be opened without
         your passphrase or recovery key, so <b className="text-ink">nothing can bring them back</b>. Your normal snippets are not touched. Afterwards you set up a
         new vault with a new passphrase.
       </p>
@@ -511,7 +515,7 @@ export function VaultDetail() {
   const nav = useNavigate();
   const toast = useToast();
   const { confirm } = useModal();
-  const { status, entries, moveOut, deleteEntry, loadImages, addImages, removeImage, updateEntry } = useVault();
+  const { status, entries, moveOut, moveOutBlock, deleteEntry, loadImages, addImages, removeImage, updateEntry } = useVault();
   const copySnippet = useCopySnippet();
   const entry = entries.find((e) => e.id === id);
   const [images, setImages] = useState<SnippetImage[]>([]);
@@ -628,6 +632,9 @@ export function VaultDetail() {
   if (!entry) return <Card icon="shield" title="Not in the vault">This item isn't in your vault (it may have been moved out).</Card>;
 
   const out = async () => {
+    let blocked: string | null;
+    try { blocked = await moveOutBlock(entry.id); } catch { toast("Couldn't check this item's audio", { kind: "err" }); return; }
+    if (blocked) { toast(blocked, { kind: "err" }); return; }
     if (!(await confirm({ title: "Move out of the vault?", description: "It becomes a normal snippet again, stored unencrypted. Only do this once the snippet no longer needs to be secret.", confirmLabel: "Move out" }))) return;
     setBusy(true);
     try { await moveOut(entry.id); toast("Moved out of the vault"); nav("/vault"); }
@@ -724,6 +731,7 @@ export function VaultDetail() {
           </button>
         )}
       </div>
+      <AudioSection itemId={entry.id} title="Voice & music" />
     </div>
   );
 }

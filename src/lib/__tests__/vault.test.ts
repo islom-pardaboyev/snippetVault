@@ -42,6 +42,12 @@ const img = (id = "i1"): SnippetImage => ({
 });
 
 describe("payload mapping", () => {
+  it("defaults audio_count to 0 and passes a set value through", () => {
+    const item = { id: "a", enc: { v: 1 as const, iv: "", ct: "" }, image_count: 0, created_at: "a", updated_at: "b" };
+    expect(entryOf(item, payloadOf(snip())).audio_count).toBe(0);
+    expect(entryOf({ ...item, audio_count: 3 }, payloadOf(snip())).audio_count).toBe(3);
+  });
+
   it("round-trips a full snippet through payloadOf/snippetOf", () => {
     const entry = entryOf(
       { id: "s42", enc: { v: 1, iv: "", ct: "" }, image_count: 2, created_at: "a", updated_at: "b" },
