@@ -73,7 +73,7 @@ export interface VaultImage {
 }
 
 /** Plaintext metadata about a hosted blob. The URL is opaque; `iv`/`sha`/`bytes` are not secret. */
-interface VaultImageRemote {
+export interface VaultImageRemote {
   url: string;
   /** base64 GCM IV — needed to decrypt, useless without the vault key. */
   iv: string;
@@ -330,7 +330,7 @@ export async function putVaultItem(uid: string, item: VaultItem): Promise<void> 
  * storage quota — never readability: what sits at the far end is AES-GCM ciphertext.
  * Callers don't wait on the host per image; all requests fire in parallel and are settled.
  */
-async function purgeHosted(images: Omit<VaultImage, "id">[]): Promise<void> {
+export async function purgeHosted(images: Omit<VaultImage, "id">[]): Promise<void> {
   const urls = images.map((im) => im.remote?.delete_url).filter((u): u is string => !!u);
   if (!urls.length) return;
   await Promise.allSettled(urls.map((u) => deleteHostedImage(u)));
