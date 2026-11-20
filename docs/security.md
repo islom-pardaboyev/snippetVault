@@ -24,6 +24,8 @@ The same policy is declared twice — **keep them byte-identical**:
 - `firebase.json` → `hosting.headers["**"]` (Firebase Hosting)
 - `vercel.json` → `headers[].source: "/(.*)"` (Vercel)
 
+When a directive changes (for example `media-src 'self' blob:` for vault audio), edit both files and deploy both.
+
 ```
 Content-Security-Policy: default-src 'self'; … ; manifest-src 'self' blob:
 X-Content-Type-Options: nosniff
@@ -42,6 +44,7 @@ Why each CSP allowance exists:
 | `connect-src` | `https://*.googleapis.com` | Firestore, Auth (`identitytoolkit`), Secure Token. |
 | `connect-src` | `https://cdn.jsdelivr.net` | Pyodide fetches its wasm/packages in the worker. |
 | `connect-src` | `https://api.imgbb.com`, `https://i.ibb.co`, `https://ibb.co` | Vault image upload, ciphertext download, and best-effort delete. |
+| `media-src` | `blob:` | Vault audio is decrypted in memory and played from a `blob:` URL. Without it the `<audio>` element falls back to `default-src 'self'` and playback is blocked. |
 | `img-src` | `https:` (any) | Notes and snippets may embed arbitrary external image URLs. Images cannot execute script. |
 | `style-src` | `'unsafe-inline'` | Tiptap/ProseMirror and CodeMirror inject `<style>` elements at runtime. |
 | `frame-ancestors 'none'`, `object-src 'none'` | — | Clickjacking and plugin content; these are the reasons the header exists. |
@@ -128,6 +131,23 @@ content — the URL stays in the image record so the owner can reclaim it by han
 **standalone gallery** (`users/{uid}/vaultImages`, images attached to no snippet) runs the identical
 pipeline: seal → verified imgbb pointer (inline fallback), purge on delete, wipe with the account.
 
+**Audio lifecycle.** Vault audio (voice, music; 25 MB cap, MP3/M4A/OGG/WAV/WebM) uses the same
+seal → upload → download → SHA-256 compare pipeline, with two differences: it requires `IMB_API`
+and it has **no inline fallback** (a file that can't be hosted and verified is not stored, so audio
+never lands in Firestore as ciphertext). The descriptive `meta` (name, type, size, duration) is
+sealed separately with AAD `${id}:meta`; the bytes are sealed with AAD `id`. Records live at
+`users/{uid}/vault/{itemId}/audio/{audioId}` and, for the standalone "Voice & music" list,
+`users/{uid}/vaultAudio/{audioId}` (plaintext `created_at` only, for sorting); the rules require a
+hosted pointer and reject `enc`. Deleting an audio file, deleting a vault item, `wipeVault` and
+account deletion all remove the records first and then ask imgbb to delete each blob via
+`delete_url`, best-effort as above. Moving an item out of the vault is refused while it has audio,
+because normal snippets can't hold audio. Playback decrypts in memory and uses a `blob:` URL
+(`media-src 'self' blob:`, §2).
+
+**Durability caveat.** imgbb is a free third-party host with no guarantee that it keeps files. If it
+drops a blob, the Firestore record survives but the audio (or hosted image) can't be fetched, and
+the app reports it as unavailable. Keep the originals of anything irreplaceable.
+
 ## 7. Code runner sandbox
 
 ```
@@ -159,6 +179,8 @@ against rules that predate it (or vice versa) breaks share links with permission
 - **imgbb API key ships in the bundle.** Client-only architecture makes it public; it's rotatable
   and only ever sees ciphertext. (`.env.example` notes this.) Its "delete" is the reverse-engineered
   `delete_url` request (§6) — undocumented and unverifiable; worst case is stranded ciphertext.
+- **imgbb may not retain hosted blobs.** Vault audio has no inline copy, so a blob lost at imgbb is
+  lost audio (§6).
 - **`CSP script-src 'unsafe-inline'`** — see §2; required by the `srcdoc` sandbox design.
 - **Share tokens**: 24 chars from a 62-char alphabet with rejection sampling (`b >= 248` discarded)
   → uniform, ≈143 bits.

@@ -58,7 +58,7 @@ It runs as a **website**, an installable **PWA**, and a native **Android app** b
 
 ### Privacy and sharing
 
-- **Encrypted vault.** Client-side AES-256-GCM, with a passphrase and an optional recovery key. See [Vault, app lock and sharing](#vault-app-lock-and-sharing).
+- **Encrypted vault.** Client-side AES-256-GCM, with a passphrase and an optional recovery key. Holds encrypted images and audio (voice messages, music). See [Vault, app lock and sharing](#vault-app-lock-and-sharing).
 - **App lock.** A passcode screen for the device, with auto-lock.
 - **Read-only share links.** Publish a snippet or a whole group to an unguessable link that anyone can open without an account, with an optional expiry and a view counter.
 - **Shared snippets page.** `/shared` lists everything you've published, with copy, open and revoke.
@@ -133,9 +133,9 @@ Copy `.env.example` to `.env.local` (git-ignored) and fill it in. Restart `npm r
 | --- | --- |
 | `VITE_ADMIN_EMAIL` | The only account that can open `/admin`. If unset, a default in `src/lib/admin.ts` applies, so set your own. |
 | `ADMIN_PASSCODE` | The admin passcode as plain text. It is hashed at build time, and only the SHA-256 reaches the site. Use 12 or more characters. |
-| `IMB_API` | **Optional.** An imgbb API key that gives the Vault unlimited images. Without it, vault images are stored inline in Firestore. |
+| `IMB_API` | **Optional.** An imgbb API key that gives the Vault unlimited images and hosts its audio. Without it, vault images are stored inline in Firestore and audio can't be added. |
 
-> **Vault images.** With `IMB_API` set, an image added in the Vault is compressed, AES-GCM-encrypted on your device, wrapped in a lossless greyscale PNG, uploaded to imgbb, then downloaded straight back and SHA-256-verified before a ~300-byte pointer is saved to Firestore. If imgbb is unavailable, out of quota, or alters the bytes, the image falls back to inline (still encrypted) storage, so nothing is lost. The site is client-only, so the key ships inside the JavaScript bundle. Use a key you can rotate. imgbb only ever sees ciphertext.
+> **Vault images and audio.** With `IMB_API` set, an image added in the Vault is compressed, AES-GCM-encrypted on your device, wrapped in a lossless greyscale PNG, uploaded to imgbb, then downloaded straight back and SHA-256-verified before a ~300-byte pointer is saved to Firestore. If imgbb is unavailable, out of quota, or alters the bytes, the image falls back to inline (still encrypted) storage, so nothing is lost. The site is client-only, so the key ships inside the JavaScript bundle. Use a key you can rotate. imgbb only ever sees ciphertext. Vault audio goes through the same host and the same upload-and-verify steps, but it requires `IMB_API` and never falls back to inline storage. See [Vault audio](#vault-audio).
 
 ## Firebase setup
 
@@ -255,6 +255,17 @@ A private section for secrets. Everything in it is encrypted on your device befo
 - **No passphrase and no recovery key?** The vault can't be opened, only erased. **Reset the vault** (on the same screen, after typing `RESET`) permanently deletes the vault's items and images and lets you set up a new one. Your normal snippets are untouched.
 - Moving a snippet in removes **every** plaintext copy: the document, its images, its version history and its share link.
 
+#### Vault audio
+
+Voice messages and music can be stored in the Vault, either in the standalone **Voice & music** section or attached to a vault item.
+
+- **Limit and types.** Up to 25 MB per file. MP3, M4A, OGG, WAV and WebM are accepted.
+- **Needs `IMB_API`.** Audio is hosted on imgbb the same way as vault images (encrypted, wrapped in a PNG, uploaded, downloaded back and SHA-256-verified). There is **no inline fallback**: if audio can't be hosted and verified, it isn't added. Without `IMB_API` the Add audio button is disabled.
+- **Encrypted separately.** The file name, type, size and duration are sealed as `meta`, apart from the audio bytes. The only plaintext field is `created_at` on standalone audio, used to sort the list. Playback decrypts in memory and plays from a `blob:` URL.
+- **Move out is refused while an item has audio.** Normal snippets can't hold audio, so remove the item's audio first.
+- **Deleting is thorough.** Deleting an audio file, a vault item, resetting the vault or deleting your account removes the audio records, and asks imgbb to delete the hosted blobs on a best-effort basis.
+- **imgbb may not keep files forever.** Hosted blobs can be removed or lost on imgbb's side, and then that audio can't be played back. Keep the originals of any music you can't replace.
+
 ### App lock
 
 A passcode screen (4 to 12 digits) with auto-lock after 0, 1, 5 or 30 minutes, or never. It is a **device privacy screen, not encryption**. The code is stored per device and stops someone who picks up your unlocked device. Use the Vault for anything that must stay secret.
@@ -313,9 +324,10 @@ firestore.rules Per-user isolation, size and shape validation, share expiry
 | `src/lib/highlight.ts` | Dependency-free highlighter for card previews and the code image |
 | `src/components/RichNote.tsx`, `src/lib/note.ts` | Rich notes: one Tiptap document in two shapes (editor and read-only view), stored as HTML |
 | `src/lib/crypto.ts`, `src/lib/vault.ts`, `src/lib/container.ts` | Vault cryptography, vault storage, and the image container format |
+| `src/lib/vault-audio.ts` | Vault audio: type and size checks, sealing and verified hosting (no inline fallback), the sealed `meta`, Firestore records for item audio and the standalone list, and the Move-out rule |
 | `src/lib/applock.ts` | App passcode hashing and auto-lock options |
 | `src/lib/utils.ts` | Language list, the **Page** type, export and import, seed data |
-| `firestore.rules` | Per-user isolation (`users/{uid}/...`) plus size and shape validation on every write, and public read-only `shares/{token}` with server-enforced expiry |
+| `firestore.rules` | Per-user isolation (`users/{uid}/...`) plus size and shape validation on every write (including hosted vault audio at `users/{uid}/vault/{itemId}/audio` and `users/{uid}/vaultAudio`), and public read-only `shares/{token}` with server-enforced expiry |
 
 ## Security
 
