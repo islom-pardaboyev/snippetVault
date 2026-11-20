@@ -40,6 +40,7 @@ beforeEach(() => {
     items: [{ id: "a" }, { id: "b" }],
     entries: [],
     gallery: [{ id: "g" }],
+    audioGallery: [{ id: "a" }],
     recoveryAvailable: true,
     unlock: vi.fn().mockResolvedValue(undefined),
     resetPassphrase: vi.fn().mockResolvedValue(undefined),
@@ -138,6 +139,7 @@ describe("locked vault: reset", () => {
     const text = document.body.textContent ?? "";
     expect(text).toContain("2 items");
     expect(text).toContain("1 image");
+    expect(text).toContain("1 audio file");
     expect(text).toContain("nothing can bring them back");
 
     const wipe = button("Delete vault and start over")!;

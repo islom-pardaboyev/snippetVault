@@ -1,5 +1,5 @@
 import {
-  collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, orderBy, query, setDoc,
+  collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, orderBy, query, setDoc, updateDoc,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import {
@@ -326,6 +326,22 @@ export function watchVaultItems(uid: string, cb: (items: VaultItem[]) => void, o
 export async function putVaultItem(uid: string, item: VaultItem): Promise<void> {
   const { id, ...data } = item;
   await setDoc(itemDoc(uid, id), data);
+}
+
+/**
+ * Partial write of an item's own fields. `updateDoc` (unlike `setDoc`) fails on a missing doc, so
+ * a late write can never resurrect a deleted item, and it never touches fields it wasn't given
+ * (a stale snapshot can't reset `audio_count`).
+ */
+export async function patchVaultItem(
+  uid: string, id: string, fields: Partial<Pick<VaultItem, "enc" | "image_count">>,
+): Promise<void> {
+  await updateDoc(itemDoc(uid, id), { ...fields, updated_at: new Date().toISOString() });
+}
+
+/** Atomically add `delta` to an item's `audio_count` (rejects if the item is gone). */
+export async function bumpAudioCount(uid: string, id: string, delta: number): Promise<void> {
+  await updateDoc(itemDoc(uid, id), { audio_count: increment(delta), updated_at: new Date().toISOString() });
 }
 
 /**

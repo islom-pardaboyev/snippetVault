@@ -252,7 +252,7 @@ A private section for secrets. Everything in it is encrypted on your device befo
 - Every field (title, code, notes, images, history) is **AES-256-GCM** encrypted with a fresh IV and per-item AAD.
 - An optional **recovery key**, shown once when you create the vault. Losing both the passphrase and the recovery key loses the data. Nothing server-side can recover it.
 - **Forgot the passphrase?** On the locked screen choose **Forgot your passphrase? Use your recovery key**, then set a new passphrase. Everything in the vault stays readable, and the recovery key keeps working.
-- **No passphrase and no recovery key?** The vault can't be opened, only erased. **Reset the vault** (on the same screen, after typing `RESET`) permanently deletes the vault's items and images and lets you set up a new one. Your normal snippets are untouched.
+- **No passphrase and no recovery key?** The vault can't be opened, only erased. **Reset the vault** (on the same screen, after typing `RESET`) permanently deletes the vault's items, images and audio and lets you set up a new one. Your normal snippets are untouched.
 - Moving a snippet in removes **every** plaintext copy: the document, its images, its version history and its share link.
 
 #### Vault audio
@@ -261,8 +261,8 @@ Voice messages and music can be stored in the Vault, either in the standalone **
 
 - **Limit and types.** Up to 25 MB per file. MP3, M4A, OGG, WAV and WebM are accepted.
 - **Needs `IMB_API`.** Audio is hosted on imgbb the same way as vault images (encrypted, wrapped in a PNG, uploaded, downloaded back and SHA-256-verified). There is **no inline fallback**: if audio can't be hosted and verified, it isn't added. Without `IMB_API` the Add audio button is disabled.
-- **Encrypted separately.** The file name, type, size and duration are sealed as `meta`, apart from the audio bytes. The only plaintext field is `created_at` on standalone audio, used to sort the list. Playback decrypts in memory and plays from a `blob:` URL.
-- **Move out is refused while an item has audio.** Normal snippets can't hold audio, so remove the item's audio first.
+- **Encrypted separately.** The file name, type and duration are sealed as `meta`, apart from the audio bytes. The file size is still visible from the ciphertext length, and the pointer fields (`url`, `iv`, `sha`, `bytes`, `delete_url`), the item's `audio_count` and `created_at` on standalone audio (used to sort the list) are plaintext. Playback decrypts in memory and plays from a `blob:` URL.
+- **Move out is refused while an item has audio.** Normal snippets can't hold audio, so remove the item's audio first. The check reads the item's real audio records, not a counter.
 - **Deleting is thorough.** Deleting an audio file, a vault item, resetting the vault or deleting your account removes the audio records, and asks imgbb to delete the hosted blobs on a best-effort basis.
 - **imgbb may not keep files forever.** Hosted blobs can be removed or lost on imgbb's side, and then that audio can't be played back. Keep the originals of any music you can't replace.
 

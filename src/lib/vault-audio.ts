@@ -38,8 +38,37 @@ export interface VaultGalleryAudio extends VaultAudio {
   created_at: string;
 }
 
+/** Types browsers really report for the same formats, mapped onto the canonical set above. */
+const MIME_ALIASES: Record<string, string> = {
+  "audio/mp3": "audio/mpeg", "audio/x-mpeg": "audio/mpeg", "audio/x-mp3": "audio/mpeg",
+  "audio/wave": "audio/wav", "audio/vnd.wave": "audio/wav",
+  "audio/aac": "audio/mp4", "audio/x-aac": "audio/mp4", "audio/m4a": "audio/mp4",
+  "audio/opus": "audio/ogg", "audio/x-ogg": "audio/ogg",
+};
+const EXT_TYPES: Record<string, string> = {
+  mp3: "audio/mpeg", m4a: "audio/mp4", ogg: "audio/ogg", oga: "audio/ogg", opus: "audio/ogg",
+  wav: "audio/wav", webm: "audio/webm",
+};
+/** For the file input's `accept` attribute: canonical types, aliases and extensions. */
+export const AUDIO_ACCEPT = [
+  ...AUDIO_TYPES, ...Object.keys(MIME_ALIASES), ...Object.keys(EXT_TYPES).map((e) => `.${e}`),
+].join(",");
+
+/**
+ * The canonical, playable type for a file, or `null` when it isn't audio we accept. An empty
+ * type (common for .m4a/.opus on Android and Linux) falls back to the extension.
+ */
+export function canonicalAudioType(file: { name: string; type: string }): string | null {
+  const type = file.type.trim().toLowerCase();
+  if (AUDIO_TYPES.includes(type)) return type;
+  if (type in MIME_ALIASES) return MIME_ALIASES[type];
+  if (type !== "") return null;
+  const ext = /\.([a-z0-9]+)$/i.exec(file.name)?.[1].toLowerCase();
+  return (ext && EXT_TYPES[ext]) || null;
+}
+
 export function checkAudioFile(file: { name: string; type: string; size: number }): string | null {
-  if (!AUDIO_TYPES.includes(file.type)) return "That file is not a supported audio type (MP3, M4A, OGG, WAV or WebM).";
+  if (!canonicalAudioType(file)) return "That file is not a supported audio type (MP3, M4A, OGG, WAV or WebM).";
   if (file.size <= 0) return "That audio file is empty.";
   if (file.size > AUDIO_MAX_BYTES) return "That audio file is larger than 25 MB.";
   return null;
@@ -52,11 +81,18 @@ export function moveOutBlocker(audioCount: number | undefined): string | null {
   return (audioCount ?? 0) > 0 ? MOVE_OUT_AUDIO_ERROR : null;
 }
 
+/** The Move-out guard, based on the real audio records (the `audio_count` counter can drift). */
+export async function moveOutCheck(uid: string, itemId: string): Promise<string | null> {
+  return moveOutBlocker((await listVaultAudio(uid, itemId)).length);
+}
+
 /**
  * Validate and store a batch of audio files one at a time. Never throws: a bad or failing file
  * is skipped with a note, and `added` is exactly the number of records `store` completed, so the
  * caller can bump `audio_count` by that number even after a partial failure.
  */
+export const AUDIO_SAVE_ERROR = "was uploaded but couldn't be saved. Check that the Firestore rules are deployed.";
+
 export async function storeAudioBatch(
   files: File[],
   store: (file: File) => Promise<void>,
@@ -74,8 +110,9 @@ export async function storeAudioBatch(
     try {
       await store(file);
       added++;
-    } catch {
-      problems.push(`${file.name}: couldn't be encrypted and hosted.`);
+    } catch (e) {
+      const saveFailed = e instanceof Error && e.message === "audio-save-failed";
+      problems.push(`${file.name}: ${saveFailed ? AUDIO_SAVE_ERROR : "couldn't be encrypted and hosted."}`);
     }
   }
   return problems.length ? { added, error: problems.join(" ") } : { added };
@@ -115,12 +152,37 @@ export async function openAudioBytes(key: CryptoKey, audio: VaultAudio): Promise
   return openBytes(key, { v: 1, iv, ct: toBase64(raw) }, audio.id);
 }
 
-/** Audio length in seconds, or 0 when the browser can't read it. */
-export function readAudioDuration(file: File): Promise<number> {
+/**
+ * Run a Firestore put for an already-hosted record; if it fails, best-effort delete the blob so
+ * it isn't orphaned and report a distinct `audio-save-failed`.
+ */
+export async function saveOrPurge(sealed: VaultAudio, put: () => Promise<void>): Promise<void> {
+  try {
+    await put();
+  } catch {
+    try { await purgeHosted([{ remote: sealed.remote }]); } catch { /* best effort */ }
+    throw new Error("audio-save-failed");
+  }
+}
+
+export const AUDIO_DURATION_TIMEOUT_MS = 5000;
+
+/** Audio length in seconds, or 0 when the browser can't read it (or takes over ~5 s). */
+export function readAudioDuration(
+  file: File, makeAudio: () => HTMLAudioElement = () => new Audio(),
+): Promise<number> {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file);
-    const el = new Audio();
-    const done = (n: number) => { URL.revokeObjectURL(url); resolve(Number.isFinite(n) && n > 0 ? n : 0); };
+    const el = makeAudio();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const done = (n: number) => {
+      clearTimeout(timer);
+      el.onloadedmetadata = null;
+      el.onerror = null;
+      URL.revokeObjectURL(url);
+      resolve(Number.isFinite(n) && n > 0 ? n : 0);
+    };
+    timer = setTimeout(() => done(0), AUDIO_DURATION_TIMEOUT_MS);
     el.preload = "metadata";
     el.onloadedmetadata = () => done(el.duration);
     el.onerror = () => done(0);

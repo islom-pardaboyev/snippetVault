@@ -5,7 +5,7 @@ import { useModal } from "./Modal";
 import { useToast } from "../hooks/ui";
 import { useVault, type AudioEntry } from "../hooks/vault";
 import { hasImgbb } from "../lib/imgbb";
-import { AUDIO_TYPES } from "../lib/vault-audio";
+import { AUDIO_ACCEPT } from "../lib/vault-audio";
 
 interface Props {
   /** The vault item the audio belongs to, or `null` for the standalone section. */
@@ -81,9 +81,14 @@ export function AudioSection({ itemId, title, hint }: Props) {
         {title}{list.length > 0 && <span className="text-muted">· {list.length}</span>}
       </h2>
       <div
-        onDragOver={(e) => { if (canAdd && e.dataTransfer.types.includes("Files")) { e.preventDefault(); setOver(true); } }}
+        // Always cancel file drags here: a file dropped on the page would navigate the tab away
+        // and discard the unlocked vault key, even when adding is currently disabled.
+        onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setOver(canAdd); } }}
         onDragLeave={() => setOver(false)}
-        onDrop={(e) => { e.preventDefault(); setOver(false); void onAdd([...e.dataTransfer.files]); }}
+        onDrop={(e) => {
+          e.preventDefault(); setOver(false);
+          if (canAdd) void onAdd([...e.dataTransfer.files]);
+        }}
         className={`rounded-card border border-dashed p-3 transition ${over ? "border-accent bg-accent/10" : "border-line-strong"}`}
       >
         <div className="grid gap-2.5">
@@ -97,7 +102,7 @@ export function AudioSection({ itemId, title, hint }: Props) {
           <button type="button" className="btn" disabled={!canAdd} onClick={() => file.current?.click()}>
             <Icon name="music" size={16} /> Add audio
           </button>
-          <input ref={file} type="file" accept={AUDIO_TYPES.join(",")} multiple hidden disabled={!hosted}
+          <input ref={file} type="file" accept={AUDIO_ACCEPT} multiple hidden disabled={!hosted}
             onChange={(e) => { void onAdd([...(e.target.files ?? [])]); e.target.value = ""; }} />
         </div>
         <p className="mt-2.5 text-xs text-faint">

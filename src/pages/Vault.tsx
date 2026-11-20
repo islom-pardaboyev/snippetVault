@@ -18,7 +18,6 @@ import { highlightLines } from "../lib/highlight";
 import { DecryptionError } from "../lib/crypto";
 import { hasImgbb } from "../lib/imgbb";
 import type { SnippetImage } from "../lib/types";
-import { moveOutBlocker } from "../lib/vault-audio";
 import type { VaultEntry } from "../lib/vault";
 
 const INPUT = "field";
@@ -457,7 +456,7 @@ function UnlockCard() {
 
 /** The last resort: with no passphrase and no recovery key the vault can't be opened, only erased. */
 function ResetVault() {
-  const { resetVault, items, gallery } = useVault();
+  const { resetVault, items, gallery, audioGallery } = useVault();
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState("");
@@ -484,13 +483,14 @@ function ResetVault() {
       </div>
     );
   }
-  const n = items.length, m = gallery.length;
+  const n = items.length, m = gallery.length, a = audioGallery.length;
   return (
     <form onSubmit={wipe} className="mt-8 grid gap-3 rounded-[14px] border border-danger/40 bg-danger/10 p-4">
       <h2 className="text-[15px] font-bold text-danger">Reset the vault</h2>
       <p className="text-[13px] text-muted">
         This permanently deletes everything in your vault: <b className="text-ink">{n} item{n === 1 ? "" : "s"}</b>
-        {m > 0 && <> and <b className="text-ink">{m} image{m === 1 ? "" : "s"}</b></>}. They are encrypted and can't be opened without
+        {m > 0 && <>, <b className="text-ink">{m} image{m === 1 ? "" : "s"}</b></>}
+        {a > 0 && <>, <b className="text-ink">{a} audio file{a === 1 ? "" : "s"}</b></>}. They are encrypted and can't be opened without
         your passphrase or recovery key, so <b className="text-ink">nothing can bring them back</b>. Your normal snippets are not touched. Afterwards you set up a
         new vault with a new passphrase.
       </p>
@@ -515,7 +515,7 @@ export function VaultDetail() {
   const nav = useNavigate();
   const toast = useToast();
   const { confirm } = useModal();
-  const { status, entries, moveOut, deleteEntry, loadImages, addImages, removeImage, updateEntry } = useVault();
+  const { status, entries, moveOut, moveOutBlock, deleteEntry, loadImages, addImages, removeImage, updateEntry } = useVault();
   const copySnippet = useCopySnippet();
   const entry = entries.find((e) => e.id === id);
   const [images, setImages] = useState<SnippetImage[]>([]);
@@ -632,7 +632,8 @@ export function VaultDetail() {
   if (!entry) return <Card icon="shield" title="Not in the vault">This item isn't in your vault (it may have been moved out).</Card>;
 
   const out = async () => {
-    const blocked = moveOutBlocker(entry.audio_count);
+    let blocked: string | null;
+    try { blocked = await moveOutBlock(entry.id); } catch { toast("Couldn't check this item's audio", { kind: "err" }); return; }
     if (blocked) { toast(blocked, { kind: "err" }); return; }
     if (!(await confirm({ title: "Move out of the vault?", description: "It becomes a normal snippet again, stored unencrypted. Only do this once the snippet no longer needs to be secret.", confirmLabel: "Move out" }))) return;
     setBusy(true);

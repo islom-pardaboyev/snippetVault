@@ -14,8 +14,6 @@ service cloud.firestore {
         && request.auth.token.email == 'ipardaboyev574@gmail.com';
     }
 
-    // A sealed image record: inline ciphertext (`enc`) **or** a pointer to ciphertext hosted
-    // on imgbb (`remote`) — never both, so a hosted image is ~300 bytes instead of ~700 KB.
     // Hosted audio: sealed `meta` plus a pointer to the ciphertext on imgbb. Never inline.
     function isHostedAudio() {
       return (
@@ -39,6 +37,8 @@ service cloud.firestore {
       );
     }
 
+    // A sealed image record: inline ciphertext (`enc`) **or** a pointer to ciphertext hosted
+    // on imgbb (`remote`) — never both, so a hosted image is ~300 bytes instead of ~700 KB.
     // Only the shape/size is checkable; the bytes are unreadable either way. Shared by the
     // item images and the standalone vault gallery below.
     function isSealedImage() {

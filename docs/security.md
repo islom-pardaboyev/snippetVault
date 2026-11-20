@@ -133,16 +133,19 @@ pipeline: seal → verified imgbb pointer (inline fallback), purge on delete, wi
 
 **Audio lifecycle.** Vault audio (voice, music; 25 MB cap, MP3/M4A/OGG/WAV/WebM) uses the same
 seal → upload → download → SHA-256 compare pipeline, with two differences: it requires `IMB_API`
-and it has **no inline fallback** (a file that can't be hosted and verified is not stored, so audio
-never lands in Firestore as ciphertext). The descriptive `meta` (name, type, size, duration) is
-sealed separately with AAD `${id}:meta`; the bytes are sealed with AAD `id`. Records live at
-`users/{uid}/vault/{itemId}/audio/{audioId}` and, for the standalone "Voice & music" list,
-`users/{uid}/vaultAudio/{audioId}` (plaintext `created_at` only, for sorting); the rules require a
-hosted pointer and reject `enc`. Deleting an audio file, deleting a vault item, `wipeVault` and
-account deletion all remove the records first and then ask imgbb to delete each blob via
-`delete_url`, best-effort as above. Moving an item out of the vault is refused while it has audio,
-because normal snippets can't hold audio. Playback decrypts in memory and uses a `blob:` URL
-(`media-src 'self' blob:`, §2).
+and it has **no inline fallback** (a file that can't be hosted and verified is not stored, so the
+audio bytes never land in Firestore; only a pointer and a small sealed metadata blob do). The
+descriptive `meta` (name, type, duration) is sealed separately with AAD `${id}:meta`; the bytes are
+sealed with AAD `id`. The file size is still visible from the ciphertext length, and the pointer
+fields (`url`, `iv`, `sha`, `bytes`, `delete_url`) and the item's `audio_count` are plaintext.
+Records live at `users/{uid}/vault/{itemId}/audio/{audioId}` and, for the standalone "Voice &
+music" list, `users/{uid}/vaultAudio/{audioId}` (plaintext `created_at` too, for sorting); the rules
+require a hosted pointer and reject `enc`. Deleting an audio file, deleting a vault item,
+`wipeVault` and account deletion all remove the records first and then ask imgbb to delete each blob
+via `delete_url`, best-effort as above. Moving an item out of the vault is refused while it has
+audio, because normal snippets can't hold audio; the check lists the item's real audio records
+rather than trusting `audio_count`, and the counter itself is only changed with atomic partial
+writes. Playback decrypts in memory and uses a `blob:` URL (`media-src 'self' blob:`, §2).
 
 **Durability caveat.** imgbb is a free third-party host with no guarantee that it keeps files. If it
 drops a blob, the Firestore record survives but the audio (or hosted image) can't be fetched, and
