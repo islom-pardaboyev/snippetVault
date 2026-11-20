@@ -2,8 +2,9 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { DEMO, useAuth } from "./auth";
 import { useSnippets } from "./snippets";
 import {
-  changeVaultPassphrase, createVaultKey, unlockVaultKey, unlockVaultKeyWithRecovery,
+  changeVaultPassphrase, createVaultKey, resetPassphraseWithRecovery, unlockVaultKey,
 } from "../lib/crypto";
+import { wipeVault } from "../lib/account";
 import { compressAll } from "../lib/images";
 import { newId } from "../lib/utils";
 import type { Snippet, SnippetImage } from "../lib/types";
@@ -30,7 +31,10 @@ interface VaultCtx {
   /** Create the vault; resolves with the one-time recovery key to show the user. */
   setup(passphrase: string, withRecovery?: boolean): Promise<string | null>;
   unlock(passphrase: string): Promise<void>;
-  unlockWithRecovery(recoveryKey: string): Promise<void>;
+  /** Forgot the passphrase: unlock with the recovery key and set a new passphrase in one step. */
+  resetPassphrase(recoveryKey: string, next: string): Promise<void>;
+  /** Permanently delete the whole vault and start over (for a lost passphrase and recovery key). */
+  resetVault(): Promise<void>;
   lock(): void;
   changePassphrase(current: string, next: string): Promise<void>;
   /** Move a plaintext snippet into the vault (encrypt, then delete the original). */
@@ -162,11 +166,26 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     setStatus("unlocked");
   }, [meta]);
 
-  const unlockWithRecovery = useCallback(async (recoveryKey: string) => {
-    if (!meta?.recovery_wrapped_dek) throw new Error("This vault has no recovery key.");
-    keyRef.current = await unlockVaultKeyWithRecovery(recoveryKey, meta.recovery_wrapped_dek);
+  const resetPassphrase = useCallback(async (recoveryKey: string, next: string) => {
+    if (!uid || !meta?.recovery_wrapped_dek) throw new Error("This vault has no recovery key.");
+    const rewrapped = await resetPassphraseWithRecovery(recoveryKey, meta.recovery_wrapped_dek, next);
+    const updated: VaultMeta = { ...meta, ...rewrapped, updated_at: new Date().toISOString() };
+    await putVaultMeta(uid, updated);
+    setMeta(updated);
+    keyRef.current = await unlockVaultKey(next, updated.kdf, updated.wrapped_dek);
     setStatus("unlocked");
-  }, [meta]);
+  }, [uid, meta]);
+
+  const resetVault = useCallback(async () => {
+    if (!uid) throw new Error("Sign in to use the vault.");
+    await wipeVault(uid);
+    keyRef.current = null;
+    imageMeta.current.clear();
+    galleryRef.current = [];
+    setEntries([]); setItems([]); setGallery([]);
+    setMeta(null);
+    setStatus("unset");
+  }, [uid]);
 
   const changePassphrase = useCallback(async (current: string, next: string) => {
     if (!uid || !meta) throw new Error("Unlock the vault first.");
@@ -326,10 +345,10 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<VaultCtx>(() => ({
     available, status, items, entries, gallery, recoveryAvailable: !!meta?.recovery_wrapped_dek,
-    setup, unlock, unlockWithRecovery, lock, changePassphrase,
+    setup, unlock, resetPassphrase, resetVault, lock, changePassphrase,
     moveIn, moveGroupIn, moveOut, updateEntry, deleteEntry, addImages, removeImage, loadImages,
     addGalleryImages, removeGalleryImage, loadGalleryImages,
-  }), [available, status, items, entries, gallery, meta, setup, unlock, unlockWithRecovery, lock, changePassphrase, moveIn, moveGroupIn, moveOut, updateEntry, deleteEntry, addImages, removeImage, loadImages, addGalleryImages, removeGalleryImage, loadGalleryImages]);
+  }), [available, status, items, entries, gallery, meta, setup, unlock, resetPassphrase, resetVault, lock, changePassphrase, moveIn, moveGroupIn, moveOut, updateEntry, deleteEntry, addImages, removeImage, loadImages, addGalleryImages, removeGalleryImage, loadGalleryImages]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

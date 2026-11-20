@@ -11,6 +11,7 @@ import {
   openBytes,
   openText,
   randomBytes,
+  resetPassphraseWithRecovery,
   sealBytes,
   sealText,
   sha256,
@@ -181,6 +182,33 @@ describe("vault key lifecycle", () => {
 
     const viaRecovery = await unlockVaultKeyWithRecovery(material.recovery_key!, material.recovery_wrapped_dek!);
     expect(await openText(viaRecovery, sealed)).toBe("written long ago");
+  });
+
+  it("resets a forgotten passphrase from the recovery key, keeping old ciphertext readable", async () => {
+    const material = await createVaultKey("forgotten", FAST);
+    const key = await unlockVaultKey("forgotten", material.kdf, material.wrapped_dek);
+    const sealed = await sealText(key, "still here");
+
+    const next = await resetPassphraseWithRecovery(material.recovery_key!, material.recovery_wrapped_dek!, "brand-new-pass", FAST);
+
+    await expect(unlockVaultKey("forgotten", next.kdf, next.wrapped_dek)).rejects.toBeInstanceOf(DecryptionError);
+    const reopened = await unlockVaultKey("brand-new-pass", next.kdf, next.wrapped_dek);
+    expect(await openText(reopened, sealed)).toBe("still here");
+    expect(next.kdf.salt).not.toBe(material.kdf.salt); // a fresh salt, not the old one
+
+    // The recovery key itself is unchanged and still works.
+    const again = await unlockVaultKeyWithRecovery(material.recovery_key!, material.recovery_wrapped_dek!);
+    expect(await openText(again, sealed)).toBe("still here");
+  });
+
+  it("refuses to reset the passphrase with a wrong or malformed recovery key", async () => {
+    const material = await createVaultKey("forgotten", FAST);
+    await expect(
+      resetPassphraseWithRecovery(generateRecoveryKey(), material.recovery_wrapped_dek!, "new-pass-1", FAST),
+    ).rejects.toBeInstanceOf(DecryptionError);
+    await expect(
+      resetPassphraseWithRecovery("nope", material.recovery_wrapped_dek!, "new-pass-1", FAST),
+    ).rejects.toThrow(/recovery key/i);
   });
 
   it("refuses to change the passphrase with the wrong old one", async () => {

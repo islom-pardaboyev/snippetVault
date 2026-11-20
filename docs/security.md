@@ -105,7 +105,13 @@ parse time. `note.ts`'s `noteToHtml()` escapes plain text before it enters that 
   image bytes, version history)
 
 The server stores only `iv || ciphertext`. Losing the passphrase/recovery key loses the data —
-by design; nothing server-side can recover it. Tests override iterations (`FAST`) so they don't
+by design; nothing server-side can recover it.
+
+**Forgotten passphrase.** The recovery key unwraps the same DEK, so it can *re-seal* it under a new
+passphrase and a fresh salt (`resetPassphraseWithRecovery`): old ciphertext stays readable and the
+recovery key stays valid. With neither secret the only option is `wipeVault` (the "Reset the vault"
+screen, behind a typed `RESET`), which deletes the vault's items, sealed images, gallery and
+`meta/vault` — and nothing else — so a new vault can be created. It never touches normal snippets. Tests override iterations (`FAST`) so they don't
 mine CPUs; production always uses the OWASP work factor.
 
 Snippet images (non-vault) are stored as base64 in Firestore and are **not** encrypted — only the

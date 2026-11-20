@@ -366,50 +366,142 @@ function RecoveryCard({ recoveryKey, onDone }: { recoveryKey: string; onDone(): 
 }
 
 function UnlockCard() {
-  const { unlock, unlockWithRecovery, recoveryAvailable } = useVault();
+  const { unlock, resetPassphrase, recoveryAvailable } = useVault();
+  const toast = useToast();
   const [mode, setMode] = useState<"pass" | "recovery">("pass");
   const [value, setValue] = useState("");
+  const [pass, setPass] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [show, setShow] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const recovering = mode === "recovery";
+  const switchMode = (next: "pass" | "recovery") => {
+    setMode(next); setValue(""); setPass(""); setConfirm(""); setErr("");
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true); setErr("");
     try {
-      if (mode === "pass") await unlock(value);
-      else await unlockWithRecovery(value);
+      if (!recovering) await unlock(value);
+      else {
+        await resetPassphrase(value, pass);
+        toast("New passphrase set. Your recovery key still works.");
+      }
     } catch (error) {
-      setErr(error instanceof DecryptionError ? (mode === "pass" ? "Wrong passphrase." : "That recovery key doesn't match.") : "Couldn't unlock the vault.");
+      if (error instanceof DecryptionError) setErr(recovering ? "That recovery key doesn't match this vault." : "Wrong passphrase.");
+      else if (recovering && error instanceof Error && /recovery key/i.test(error.message)) setErr(error.message);
+      else setErr(recovering ? "Couldn't reset the passphrase. Try again." : "Couldn't unlock the vault.");
     } finally { setBusy(false); }
   };
 
   return (
     <div className="anim-rise mx-auto max-w-[460px]">
       <div className="mb-4 grid size-12 place-items-center rounded-2xl bg-accent/15 text-accent"><Icon name="lock" size={24} /></div>
-      <h1 className="mb-1.5 text-[26px] font-bold tracking-tight">Vault locked</h1>
-      <p className="mb-5 text-muted">Enter your passphrase to decrypt your snippets for this session. The vault locks again when you close or background the tab.</p>
+      <h1 className="mb-1.5 text-[26px] font-bold tracking-tight">{recovering ? "Reset your passphrase" : "Vault locked"}</h1>
+      <p className="mb-5 text-muted">
+        {recovering
+          ? "Enter your recovery key and choose a new passphrase. Everything in the vault stays readable, and your recovery key keeps working."
+          : "Enter your passphrase to decrypt your snippets for this session. The vault locks again when you close or background the tab."}
+      </p>
       <form onSubmit={submit} className="grid gap-3">
         <label className="relative block">
-          <span className="mb-1.5 block text-[12.5px] font-semibold text-muted">{mode === "pass" ? "Passphrase" : "Recovery key"}</span>
-          <input autoFocus type={mode === "recovery" || show ? "text" : "password"} autoComplete="off" value={value} onChange={(e) => setValue(e.target.value)} className={`${INPUT} pr-11`} placeholder={mode === "pass" ? "Your passphrase" : "XXXX-XXXX-…"} />
-          {mode === "pass" && (
-            <button type="button" aria-label={show ? "Hide" : "Show"} onClick={() => setShow((s) => !s)}
+          <span className="mb-1.5 block text-[12.5px] font-semibold text-muted">{recovering ? "Recovery key" : "Passphrase"}</span>
+          <input autoFocus type={recovering || show ? "text" : "password"} autoComplete="off" value={value} onChange={(e) => setValue(e.target.value)}
+            className={`${INPUT} ${recovering ? "" : "pr-11"}`} placeholder={recovering ? "XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX" : "Your passphrase"} />
+          {!recovering && (
+            <button type="button" aria-label={show ? "Hide" : "Show"} onClick={() => setShow((x) => !x)}
               className="absolute bottom-0 right-1.5 grid h-[46px] w-9 place-items-center text-muted hover:text-ink"><Icon name={show ? "eyeoff" : "eye"} size={18} /></button>
           )}
         </label>
-        {err && <p className="text-[13px] text-danger">{err}</p>}
-        <button className="btn btn-primary btn-lg" disabled={busy || !value}>{busy ? "Unlocking…" : "Unlock"}</button>
+        {recovering && (
+          <>
+            <label className="block">
+              <span className="mb-1.5 block text-[12.5px] font-semibold text-muted">New passphrase</span>
+              <input type={show ? "text" : "password"} autoComplete="new-password" value={pass} onChange={(e) => setPass(e.target.value)} className={INPUT} placeholder="At least 8 characters" />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-[12.5px] font-semibold text-muted">Confirm new passphrase</span>
+              <input type={show ? "text" : "password"} autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} className={INPUT} placeholder="Type it again" />
+            </label>
+            <div className="rounded-[10px] border border-line bg-surface-2/60 px-3.5 py-3">
+              <span className="mb-1 block text-[11px] font-bold uppercase tracking-[.1em] text-faint">Passphrase requirements</span>
+              <PwMeter pw={pass} confirm={confirm} min={8} />
+            </div>
+            <label className="flex items-center gap-2 text-[13px] text-muted">
+              <input type="checkbox" checked={show} onChange={(e) => setShow(e.target.checked)} className="size-4 accent-[var(--accent)]" /> Show passphrase
+            </label>
+          </>
+        )}
+        {err && <p role="alert" className="text-[13px] text-danger">{err}</p>}
+        <button className="btn btn-primary btn-lg" disabled={busy || !value || (recovering && !passwordValid(pass, confirm))}>
+          {busy ? (recovering ? "Resetting…" : "Unlocking…") : recovering ? "Set new passphrase and unlock" : "Unlock"}
+        </button>
       </form>
       <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[13px]">
-        {mode === "pass" && recoveryAvailable && (
-          <button className="link-btn" onClick={() => { setMode("recovery"); setValue(""); setErr(""); }}>Use a recovery key instead</button>
+        {!recovering && recoveryAvailable && (
+          <button className="link-btn" onClick={() => switchMode("recovery")}>Forgot your passphrase? Use your recovery key</button>
         )}
-        {mode === "recovery" && (
-          <button className="link-btn" onClick={() => { setMode("pass"); setValue(""); setErr(""); }}>Back to passphrase</button>
-        )}
+        {recovering && <button className="link-btn" onClick={() => switchMode("pass")}>Back to passphrase</button>}
       </div>
+      <ResetVault />
     </div>
+  );
+}
+
+/** The last resort: with no passphrase and no recovery key the vault can't be opened, only erased. */
+function ResetVault() {
+  const { resetVault, items, gallery } = useVault();
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const wipe = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true); setErr("");
+    try {
+      await resetVault(); // the page then swaps to "Set up your Vault"
+      toast("Vault reset. Set up a new one.");
+    } catch {
+      setErr("Couldn't reset the vault. Check your connection and try again.");
+      setBusy(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <div className="mt-8 border-t border-line pt-5 text-[13px] text-muted">
+        Lost your passphrase and your recovery key?{" "}
+        <button className="link-btn" onClick={() => setOpen(true)}>Reset the vault</button>
+      </div>
+    );
+  }
+  const n = items.length, m = gallery.length;
+  return (
+    <form onSubmit={wipe} className="mt-8 grid gap-3 rounded-[14px] border border-danger/40 bg-danger/10 p-4">
+      <h2 className="text-[15px] font-bold text-danger">Reset the vault</h2>
+      <p className="text-[13px] text-muted">
+        This permanently deletes everything in your vault: <b className="text-ink">{n} item{n === 1 ? "" : "s"}</b>
+        {m > 0 && <> and <b className="text-ink">{m} image{m === 1 ? "" : "s"}</b></>}. They are encrypted and can't be opened without
+        your passphrase or recovery key, so <b className="text-ink">nothing can bring them back</b>. Your normal snippets are not touched. Afterwards you set up a
+        new vault with a new passphrase.
+      </p>
+      <label className="block">
+        <span className="mb-1.5 block text-[12.5px] font-semibold text-muted">Type <b className="text-ink">RESET</b> to confirm</span>
+        <input value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" className={INPUT} placeholder="RESET" />
+      </label>
+      {err && <p role="alert" className="text-[13px] text-danger">{err}</p>}
+      <div className="flex justify-end gap-2.5">
+        <button type="button" className="btn" onClick={() => { setOpen(false); setTyped(""); setErr(""); }} disabled={busy}>Cancel</button>
+        <button className="btn btn-danger !border-danger !bg-danger !text-white font-semibold" disabled={busy || typed.trim() !== "RESET"}>
+          {busy ? "Deleting…" : "Delete vault and start over"}
+        </button>
+      </div>
+    </form>
   );
 }
 
