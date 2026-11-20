@@ -45,6 +45,42 @@ export function checkAudioFile(file: { name: string; type: string; size: number 
   return null;
 }
 
+export const MOVE_OUT_AUDIO_ERROR = "Remove this item's audio first. Normal snippets can't hold audio.";
+
+/** Normal snippets can't hold audio, so an item that still has some must not move out. */
+export function moveOutBlocker(audioCount: number | undefined): string | null {
+  return (audioCount ?? 0) > 0 ? MOVE_OUT_AUDIO_ERROR : null;
+}
+
+/**
+ * Validate and store a batch of audio files one at a time. Never throws: a bad or failing file
+ * is skipped with a note, and `added` is exactly the number of records `store` completed, so the
+ * caller can bump `audio_count` by that number even after a partial failure.
+ */
+export async function storeAudioBatch(
+  files: File[],
+  store: (file: File) => Promise<void>,
+  check: (file: File) => string | null = checkAudioFile,
+): Promise<{ added: number; error?: string }> {
+  if (!hasImgbb()) {
+    return { added: 0, error: "Audio needs image hosting. Set IMB_API to add audio to the vault." };
+  }
+  if (!files.length) return { added: 0, error: "No audio files to add." };
+  const problems: string[] = [];
+  let added = 0;
+  for (const file of files) {
+    const bad = check(file);
+    if (bad) { problems.push(`${file.name}: ${bad}`); continue; }
+    try {
+      await store(file);
+      added++;
+    } catch {
+      problems.push(`${file.name}: couldn't be encrypted and hosted.`);
+    }
+  }
+  return problems.length ? { added, error: problems.join(" ") } : { added };
+}
+
 export async function sealAudio(
   key: CryptoKey, id: string, info: AudioInfo, bytes: Uint8Array<ArrayBuffer>,
 ): Promise<VaultAudio> {
