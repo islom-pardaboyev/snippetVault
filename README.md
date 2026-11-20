@@ -250,7 +250,9 @@ A private section for secrets. Everything in it is encrypted on your device befo
 
 - Passphrase, then **PBKDF2-HMAC-SHA-256 (600,000 iterations)**, then a key-encryption key that wraps a random 256-bit data key.
 - Every field (title, code, notes, images, history) is **AES-256-GCM** encrypted with a fresh IV and per-item AAD.
-- An optional **recovery key**. Losing both the passphrase and the recovery key loses the data. Nothing server-side can recover it.
+- An optional **recovery key**, shown once when you create the vault. Losing both the passphrase and the recovery key loses the data. Nothing server-side can recover it.
+- **Forgot the passphrase?** On the locked screen choose **Forgot your passphrase? Use your recovery key**, then set a new passphrase. Everything in the vault stays readable, and the recovery key keeps working.
+- **No passphrase and no recovery key?** The vault can't be opened, only erased. **Reset the vault** (on the same screen, after typing `RESET`) permanently deletes the vault's items and images and lets you set up a new one. Your normal snippets are untouched.
 - Moving a snippet in removes **every** plaintext copy: the document, its images, its version history and its share link.
 
 ### App lock
@@ -371,6 +373,7 @@ BASE_URL=http://localhost:5173 python3 scripts/capture-screenshots.py
 | `vite: command not found` | Dependencies are missing. Run `npm ci`. |
 | `ERESOLVE` on install (locally or on Vercel) | `.npmrc` must contain `legacy-peer-deps=true`. It is committed, so make sure the file is in the repo you're building. |
 | `invalid source release: 21` building the APK | Use JDK 21. Set `JAVA_HOME` to it before `npm run android:apk`. |
+| Forgot the Vault passphrase | Use your recovery key on the locked Vault screen to set a new passphrase. Without a recovery key, use **Reset the vault** to start over (this deletes the vault's contents). |
 | `keystore password was incorrect` | The password in `android/keystore.properties` doesn't match `android.keystore`. |
 | The download button saves an HTML file | `public/snippetvault.apk` is missing, and the site's rewrite served `index.html`. Publish the APK first. |
 | Google sign-in does nothing in the Android app | The Android app needs `google-services.json` in `android/app/` and your keystore's SHA-1 registered in Firebase. |

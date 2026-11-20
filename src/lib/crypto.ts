@@ -258,6 +258,28 @@ export async function changeVaultPassphrase(
   }
 }
 
+/**
+ * Forgot the passphrase? Unwrap the data key with the recovery key and re-seal it under a new
+ * passphrase (new salt). Everything already encrypted stays readable, and the recovery key itself
+ * keeps working. Throws `DecryptionError` for a recovery key that doesn't match this vault.
+ */
+export async function resetPassphraseWithRecovery(
+  recoveryKey: string,
+  recoveryWrappedDek: string,
+  newPassphrase: string,
+  opts: { iterations?: number } = {},
+): Promise<{ kdf: VaultKdf; wrapped_dek: string }> {
+  const rk = await recoveryKeyToAes(recoveryKey);
+  const raw = await unwrapBytes(rk, recoveryWrappedDek);
+  try {
+    const nextKdf = newKdfParams(opts.iterations);
+    const nextKek = await deriveKek(newPassphrase, nextKdf);
+    return { kdf: nextKdf, wrapped_dek: await wrapBytes(nextKek, raw) };
+  } finally {
+    zero(raw);
+  }
+}
+
 /* ------------------------------------------------------------ recovery key */
 
 /** Crockford base32 of `RECOVERY_BYTES` random bytes, grouped for easy transcription. */

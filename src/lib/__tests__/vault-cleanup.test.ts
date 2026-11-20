@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { deleteGalleryImage, deleteVaultImage, deleteVaultItem } from "../vault";
-import { wipeUserData } from "../account";
+import { wipeUserData, wipeVault } from "../account";
 
 /**
  * The image-hosting lifecycle: whenever a vault image record leaves Firestore — single image
@@ -171,5 +171,37 @@ describe("wipeUserData", () => {
     expect([...store.docs.keys()]).toEqual([]);
     // Vault-item blobs are collected before the gallery's, and allSettled preserves input order.
     expect(host.deleted).toEqual([HOSTED, GALLERY_HOSTED]);
+  });
+});
+
+describe("wipeVault", () => {
+  it("deletes only the vault — items, sealed images, gallery and key meta — and purges hosted blobs", async () => {
+    store.docs.set(`users/${UID}/snippets/s1`, { title: "keep me" });
+    store.docs.set(`users/${UID}/groups/g1`, { name: "keep me too" });
+    store.docs.set(`users/${UID}/meta/vault`, { wrapped_dek: "w", kdf: {} });
+    store.docs.set(`users/${UID}/meta/other`, { note: "not the vault" });
+    store.docs.set(`users/${UID}/vaultImages/g-1`, {
+      fmt: 2, remote: { url: "https://i.ibb.co/y/2.png", iv: "a", sha: "s", bytes: 10, delete_url: GALLERY_HOSTED },
+      created_at: "t",
+    });
+    seedVault();
+
+    await wipeVault(UID);
+
+    expect([...store.docs.keys()].sort()).toEqual([
+      `users/${UID}/groups/g1`,
+      `users/${UID}/meta/other`,
+      `users/${UID}/snippets/s1`,
+    ]);
+    expect(host.deleted).toEqual([HOSTED, GALLERY_HOSTED]);
+  });
+
+  it("still finishes when the image host refuses", async () => {
+    store.docs.set(`users/${UID}/meta/vault`, { wrapped_dek: "w", kdf: {} });
+    seedVault();
+    host.fail = true;
+
+    await expect(wipeVault(UID)).resolves.toBeUndefined();
+    expect([...store.docs.keys()]).toEqual([]);
   });
 });
