@@ -16,6 +16,29 @@ service cloud.firestore {
 
     // A sealed image record: inline ciphertext (`enc`) **or** a pointer to ciphertext hosted
     // on imgbb (`remote`) — never both, so a hosted image is ~300 bytes instead of ~700 KB.
+    // Hosted audio: sealed `meta` plus a pointer to the ciphertext on imgbb. Never inline.
+    function isHostedAudio() {
+      return (
+        'meta' in request.resource.data
+        && request.resource.data.meta.iv is string && request.resource.data.meta.iv.size() <= 64
+        && request.resource.data.meta.ct is string && request.resource.data.meta.ct.size() <= 4000
+        && 'remote' in request.resource.data
+        && request.resource.data.remote.url is string
+        && request.resource.data.remote.url.matches('^https://.*')
+        && request.resource.data.remote.url.size() <= 600
+        && request.resource.data.remote.iv is string && request.resource.data.remote.iv.size() <= 64
+        && request.resource.data.remote.sha is string && request.resource.data.remote.sha.size() <= 64
+        && request.resource.data.remote.bytes is int
+        && request.resource.data.remote.bytes > 0
+        && request.resource.data.remote.bytes <= 27000000
+        && (!('delete_url' in request.resource.data.remote)
+            || request.resource.data.remote.delete_url == null
+            || (request.resource.data.remote.delete_url is string
+                && request.resource.data.remote.delete_url.size() <= 600))
+        && !('enc' in request.resource.data)
+      );
+    }
+
     // Only the shape/size is checkable; the bytes are unreadable either way. Shared by the
     // item images and the standalone vault gallery below.
     function isSealedImage() {
@@ -109,6 +132,20 @@ service cloud.firestore {
       allow create, update: if request.auth != null && request.auth.uid == uid
         && request.resource.data.created_at is string && request.resource.data.created_at.size() <= 40
         && isSealedImage();
+    }
+
+    match /users/{uid}/vault/{itemId}/audio/{audioId} {
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && isHostedAudio();
+    }
+
+    // Standalone vault audio (no snippet); `created_at` only sorts the list.
+    match /users/{uid}/vaultAudio/{audioId} {
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.created_at is string && request.resource.data.created_at.size() <= 40
+        && isHostedAudio();
     }
 
     match /users/{uid}/vault/{itemId} {

@@ -48,6 +48,8 @@ export interface VaultItem {
   id: string;
   enc: Sealed;
   image_count: number;
+  /** Optional: items written before audio existed lack it (and Firestore rejects `undefined`). */
+  audio_count?: number;
   created_at: string;
   updated_at: string;
 }
@@ -98,6 +100,7 @@ export interface VaultGalleryImage extends VaultImage {
 export type VaultEntry = VaultPayload & {
   id: string;
   image_count: number;
+  audio_count: number;
   created_at: string;
   updated_at: string;
 };
@@ -286,6 +289,7 @@ export const entryOf = (item: VaultItem, payload: VaultPayload): VaultEntry => (
   ...payload,
   id: item.id,
   image_count: item.image_count,
+  audio_count: item.audio_count ?? 0,
   created_at: item.created_at,
   updated_at: item.updated_at,
 });
@@ -339,12 +343,15 @@ export async function purgeHosted(images: Omit<VaultImage, "id">[]): Promise<voi
 export async function deleteVaultItem(uid: string, id: string): Promise<void> {
   const snap = await getDocs(imagesCol(uid, id));
   const images = snap.docs.map((d) => d.data() as Omit<VaultImage, "id">);
+  // Audio records have the same `remote` shape; read inline (not via vault-audio.ts, which imports this file).
+  const audioSnap = await getDocs(collection(db, "users", uid, "vault", id, "audio"));
+  const audio = audioSnap.docs.map((d) => d.data() as Omit<VaultImage, "id">);
   // The records the user sees go first; then the blobs behind them, best effort. This one
   // function is what moves *out* of the vault (the plaintext was already restored to
   // Firestore by the caller) and what deletes it outright — both must drop the host copy.
-  await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
+  await Promise.all([...snap.docs, ...audioSnap.docs].map((d) => deleteDoc(d.ref)));
   await deleteDoc(itemDoc(uid, id));
-  await purgeHosted(images);
+  await purgeHosted([...images, ...audio]);
 }
 
 /* ----------------------------------------------------------------- images */

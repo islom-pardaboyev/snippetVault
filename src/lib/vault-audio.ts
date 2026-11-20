@@ -1,7 +1,9 @@
+import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, orderBy, query, setDoc } from "firebase/firestore";
+import { db } from "./firebase";
 import { type Sealed, fromBase64, openBytes, openText, sealBytes, sealText, sha256, toBase64 } from "./crypto";
 import { packBytes, unpackBytes } from "./container";
 import { fetchBlob, hasImgbb, uploadPng } from "./imgbb";
-import type { VaultImageRemote } from "./vault";
+import { purgeHosted, type VaultImageRemote } from "./vault";
 
 /**
  * Encrypted audio for the Vault. Same pipeline as hosted vault images (seal, wrap in a PNG,
@@ -88,4 +90,52 @@ export function readAudioDuration(file: File): Promise<number> {
     el.onerror = () => done(0);
     el.src = url;
   });
+}
+
+/* --------------------------------------------------------------- Firestore */
+
+const audioCol = (uid: string, itemId: string) => collection(db, "users", uid, "vault", itemId, "audio");
+const audioDoc = (uid: string, itemId: string, audioId: string) => doc(db, "users", uid, "vault", itemId, "audio", audioId);
+const galleryCol = (uid: string) => collection(db, "users", uid, "vaultAudio");
+const galleryDoc = (uid: string, audioId: string) => doc(db, "users", uid, "vaultAudio", audioId);
+
+export async function listVaultAudio(uid: string, itemId: string): Promise<VaultAudio[]> {
+  const snap = await getDocs(query(audioCol(uid, itemId), orderBy("__name__")));
+  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<VaultAudio, "id">) }));
+}
+
+export async function putVaultAudio(uid: string, itemId: string, audio: VaultAudio): Promise<void> {
+  const { id, ...data } = audio;
+  await setDoc(audioDoc(uid, itemId, id), data);
+}
+
+/** Record first, then the hosted blob, best effort (same contract as deleting an image). */
+export async function deleteVaultAudio(uid: string, itemId: string, audioId: string): Promise<void> {
+  const ref = audioDoc(uid, itemId, audioId);
+  const snap = await getDoc(ref);
+  await deleteDoc(ref);
+  if (snap.exists()) await purgeHosted([snap.data() as Omit<VaultAudio, "id">]);
+}
+
+/** Standalone vault audio, newest first. */
+export function watchGalleryAudio(
+  uid: string, cb: (a: VaultGalleryAudio[]) => void, onError?: () => void,
+): () => void {
+  return onSnapshot(
+    query(galleryCol(uid), orderBy("created_at", "desc")),
+    (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<VaultGalleryAudio, "id">) }))),
+    () => onError?.(),
+  );
+}
+
+export async function putGalleryAudio(uid: string, audio: VaultGalleryAudio): Promise<void> {
+  const { id, ...data } = audio;
+  await setDoc(galleryDoc(uid, id), data);
+}
+
+export async function deleteGalleryAudio(uid: string, audioId: string): Promise<void> {
+  const ref = galleryDoc(uid, audioId);
+  const snap = await getDoc(ref);
+  await deleteDoc(ref);
+  if (snap.exists()) await purgeHosted([snap.data() as Omit<VaultGalleryAudio, "id">]);
 }

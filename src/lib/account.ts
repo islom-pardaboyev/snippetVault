@@ -29,11 +29,22 @@ async function collectVault(uid: string, refs: DocumentReference[], hosted: stri
       collectHosted(d.data());
       refs.push(d.ref);
     });
+    const audio = await getDocs(collection(db, "users", uid, "vault", v.id, "audio"));
+    audio.docs.forEach((d) => {
+      collectHosted(d.data());
+      refs.push(d.ref);
+    });
     refs.push(v.ref);
   }
   // The standalone vault gallery: encrypted images attached to no snippet. Same contract.
   const gallery = await getDocs(collection(db, "users", uid, "vaultImages"));
   gallery.docs.forEach((d) => {
+    collectHosted(d.data());
+    refs.push(d.ref);
+  });
+  // The standalone audio gallery: same contract.
+  const galleryAudio = await getDocs(collection(db, "users", uid, "vaultAudio"));
+  galleryAudio.docs.forEach((d) => {
     collectHosted(d.data());
     refs.push(d.ref);
   });
